@@ -15,6 +15,8 @@ Deploy Supabase edge functions:
 supabase functions deploy get-customer-plan-link --remote=pzcyhagbergybdtwyahs --yes
 supabase functions deploy list-catalog-plans --remote=pzcyhagbergybdtwyahs --yes
 supabase functions deploy assign-customer-plan --remote=pzcyhagbergybdtwyahs --yes
+supabase functions deploy prepare-catalog-plan-upload --remote=pzcyhagbergybdtwyahs --yes
+supabase functions deploy register-catalog-plan --remote=pzcyhagbergybdtwyahs --yes
 
 Set function secrets:
 supabase secrets set PROJECT_URL=https://pzcyhagbergybdtwyahs.supabase.co --remote=pzcyhagbergybdtwyahs --yes

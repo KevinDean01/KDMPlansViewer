@@ -137,6 +137,26 @@
         </div>
       </div>
 
+      <div class="row">
+        <label for="newPlanName">Add new plan</label>
+        <div>
+          <input
+            id="newPlanName"
+            type="text"
+            placeholder="Plan display name (e.g. Shed Type A)"
+          />
+          <div class="actions">
+            <input id="newPlanFile" type="file" accept=".glb,model/gltf-binary" />
+            <button id="addPlanBtn" type="button" disabled>
+              Upload + Add to Catalog
+            </button>
+          </div>
+          <div class="hint">
+            Uploads one shared catalog file to <code>Plans/catalog/</code> and adds it to the plan list.
+          </div>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="provisionBtn" type="button" disabled>
           Assign Plan + Generate Customer Link
@@ -181,6 +201,8 @@
           "sb_publishable_D11hU21IX1oohA6nMjhoGA_bY7eZNlb";
         const EDGE_LIST_PLANS_FUNCTION = "list-catalog-plans";
         const EDGE_ASSIGN_FUNCTION = "assign-customer-plan";
+        const EDGE_PREPARE_PLAN_UPLOAD_FUNCTION = "prepare-catalog-plan-upload";
+        const EDGE_REGISTER_PLAN_FUNCTION = "register-catalog-plan";
 
         const adminEmailEl = document.getElementById("adminEmail");
         const adminLoginBtn = document.getElementById("adminLoginBtn");
@@ -189,6 +211,9 @@
         const customerEmailEl = document.getElementById("customerEmail");
         const planSelectEl = document.getElementById("planSelect");
         const refreshPlansBtn = document.getElementById("refreshPlansBtn");
+        const newPlanNameEl = document.getElementById("newPlanName");
+        const newPlanFileEl = document.getElementById("newPlanFile");
+        const addPlanBtn = document.getElementById("addPlanBtn");
         const provisionBtn = document.getElementById("provisionBtn");
         const statusEl = document.getElementById("status");
         const magicLinkEl = document.getElementById("magicLink");
@@ -221,6 +246,7 @@
             ? `Signed in: ${user.email || "Admin"}`
             : "Not signed in";
           refreshPlansBtn.disabled = !isSignedIn;
+          addPlanBtn.disabled = !isSignedIn;
           provisionBtn.disabled = !isSignedIn || !planSelectEl.value;
         }
 
@@ -350,6 +376,78 @@
 
         planSelectEl.addEventListener("change", () => {
           provisionBtn.disabled = !currentSessionUser || !planSelectEl.value;
+        });
+
+        addPlanBtn.addEventListener("click", async () => {
+          const planName = String(newPlanNameEl.value || "").trim();
+          const file = newPlanFileEl.files && newPlanFileEl.files[0];
+          if (!planName) {
+            setStatus("Enter a plan name first.");
+            return;
+          }
+          if (!file) {
+            setStatus("Choose a .glb file for the new plan.");
+            return;
+          }
+          if (!currentSessionUser) {
+            setStatus("Sign in as admin first.");
+            return;
+          }
+          addPlanBtn.disabled = true;
+          refreshPlansBtn.disabled = true;
+          provisionBtn.disabled = true;
+          try {
+            setStatus("Preparing catalog upload...");
+            const { data: prepData, error: prepError } =
+              await supabase.functions.invoke(EDGE_PREPARE_PLAN_UPLOAD_FUNCTION, {
+                body: {
+                  planName,
+                  fileName: file.name,
+                },
+              });
+            if (prepError) throw prepError;
+            if (
+              !prepData ||
+              !prepData.storagePath ||
+              !prepData.uploadToken ||
+              !prepData.planName
+            ) {
+              throw new Error("Plan upload preparation returned invalid response.");
+            }
+
+            setStatus("Uploading plan file to catalog...");
+            const { error: uploadError } = await supabase.storage
+              .from("Plans")
+              .uploadToSignedUrl(prepData.storagePath, prepData.uploadToken, file);
+            if (uploadError) throw uploadError;
+
+            setStatus("Registering plan...");
+            const { data: registerData, error: registerError } =
+              await supabase.functions.invoke(EDGE_REGISTER_PLAN_FUNCTION, {
+                body: {
+                  name: prepData.planName,
+                  storagePath: prepData.storagePath,
+                },
+              });
+            if (registerError) throw registerError;
+            if (!registerData || !registerData.planId) {
+              throw new Error("Plan register returned invalid response.");
+            }
+
+            newPlanNameEl.value = "";
+            newPlanFileEl.value = "";
+            await loadPlansForAdmin();
+            setStatus(`Plan added: ${registerData.name}`);
+          } catch (error) {
+            const message =
+              error && error.message ? error.message : "Unknown add-plan error";
+            setStatus(`Failed to add plan: ${message}`);
+            console.error("Add plan failure:", error);
+          } finally {
+            refreshPlansBtn.disabled = !currentSessionUser;
+            addPlanBtn.disabled = !currentSessionUser;
+            provisionBtn.disabled = !currentSessionUser || !planSelectEl.value;
+          }
         });
 
         provisionBtn.addEventListener("click", async () => {
