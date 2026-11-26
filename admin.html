@@ -102,8 +102,17 @@
             autocomplete="email"
             placeholder="you@kdmodels.co.uk"
           />
+          <input
+            id="adminPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Admin password"
+          />
           <button id="adminLoginBtn" type="button">
-            Send Admin Login Link
+            Sign In
+          </button>
+          <button id="adminMagicBtn" type="button">
+            Email Login Link
           </button>
           <button id="adminSignOutBtn" type="button" hidden>Sign Out</button>
           <div id="adminState" class="hint">Not signed in</div>
@@ -205,7 +214,9 @@
         const EDGE_REGISTER_PLAN_FUNCTION = "register-catalog-plan";
 
         const adminEmailEl = document.getElementById("adminEmail");
+        const adminPasswordEl = document.getElementById("adminPassword");
         const adminLoginBtn = document.getElementById("adminLoginBtn");
+        const adminMagicBtn = document.getElementById("adminMagicBtn");
         const adminSignOutBtn = document.getElementById("adminSignOutBtn");
         const adminStateEl = document.getElementById("adminState");
         const customerEmailEl = document.getElementById("customerEmail");
@@ -240,8 +251,10 @@
           currentSessionUser = user;
           const isSignedIn = Boolean(user);
           adminLoginBtn.hidden = isSignedIn;
+          adminMagicBtn.hidden = isSignedIn;
           adminSignOutBtn.hidden = !isSignedIn;
           adminEmailEl.hidden = isSignedIn;
+          adminPasswordEl.hidden = isSignedIn;
           adminStateEl.textContent = isSignedIn
             ? `Signed in: ${user.email || "Admin"}`
             : "Not signed in";
@@ -343,6 +356,28 @@
 
         adminLoginBtn.addEventListener("click", async () => {
           const email = String(adminEmailEl.value || "").trim();
+          const password = String(adminPasswordEl.value || "");
+          if (!email) {
+            setStatus("Enter your admin email address first.");
+            return;
+          }
+          if (!password) {
+            setStatus("Enter your admin password.");
+            return;
+          }
+          const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) {
+            setStatus(`Admin login failed: ${error.message}`);
+            return;
+          }
+          setStatus(`Signed in as ${email}.`);
+        });
+
+        adminMagicBtn.addEventListener("click", async () => {
+          const email = String(adminEmailEl.value || "").trim();
           if (!email) {
             setStatus("Enter your admin email address first.");
             return;
@@ -353,7 +388,7 @@
             options: { emailRedirectTo: redirectTo },
           });
           if (error) {
-            setStatus(`Admin login failed: ${error.message}`);
+            setStatus(`Admin login link failed: ${error.message}`);
             return;
           }
           setStatus(`Admin login link sent to ${email}.`);
@@ -365,6 +400,7 @@
             setStatus(`Sign out failed: ${error.message}`);
             return;
           }
+          adminPasswordEl.value = "";
           setResultLinks("", "", "");
           replacePlanOptions([]);
           setStatus("Signed out.");
