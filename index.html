@@ -42744,6 +42744,7 @@ void main() {
         }
         function parsePublicModelUrl(rawValue) {
           if (!rawValue) return null;
+          if (!/^https?:\/\//i.test(rawValue)) return null;
           try {
             const resolvedUrl = new URL(rawValue, window.location.href);
             if (
@@ -42759,6 +42760,23 @@ void main() {
           } catch (error2) {
             return null;
           }
+        }
+        function getAuthHashError() {
+          const hashText = String(window.location.hash || "").replace(/^#/, "");
+          if (!hashText) return "";
+          const params = new URLSearchParams(hashText);
+          const errorCode = String(params.get("error_code") || "").trim();
+          const errorDescription = String(
+            params.get("error_description") || "",
+          ).trim();
+          if (!errorCode && !errorDescription) return "";
+          if (
+            errorCode === "otp_expired" ||
+            /expired|invalid/i.test(errorDescription)
+          ) {
+            return "Your login link has expired or was already used. Request a new login link.";
+          }
+          return errorDescription || `Auth error: ${errorCode}`;
         }
         function isSupabaseConfigured() {
           return (
@@ -42873,6 +42891,10 @@ void main() {
             SUPABASE_URL,
             SUPABASE_ANON_KEY,
           );
+          const authHashError = getAuthHashError();
+          if (authHashError) {
+            setStatus(authHashError);
+          }
           supabaseClient.auth.onAuthStateChange(async (_event, session) => {
             currentAuthUser = session && session.user ? session.user : null;
             updateAuthUi(currentAuthUser);
