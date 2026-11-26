@@ -210,7 +210,9 @@
         font-weight: 600;
         font-size: 0.78rem;
         cursor: pointer;
-        box-shadow: 0 0 0 1px rgba(142, 182, 255, 0.35), 0 8px 18px rgba(16, 42, 105, 0.5);
+        box-shadow:
+          0 0 0 1px rgba(142, 182, 255, 0.35),
+          0 8px 18px rgba(16, 42, 105, 0.5);
       }
       .viewer-nav-button:hover:not(:disabled) {
         background: #4a84ff;
@@ -341,11 +343,7 @@
       <label id="openProjectButton" class="file-button" for="modelInput"
         >Open Project</label
       >
-      <input
-        id="modelInput"
-        type="file"
-        accept="*/*"
-      />
+      <input id="modelInput" type="file" accept="*/*" />
       <button id="settingsToggle" class="toolbar-button" type="button">
         Settings
       </button>
@@ -42166,7 +42164,9 @@ void main() {
           return Number.isFinite(value) ? value : null;
         }
         function detectUnitToken(valueText) {
-          const text = String(valueText || "").trim().toLowerCase();
+          const text = String(valueText || "")
+            .trim()
+            .toLowerCase();
           if (!text) return null;
           if (/(^|[^a-z])mm($|[^a-z])/.test(text)) return "mm";
           if (/(^|[^a-z])cm($|[^a-z])/.test(text)) return "mm";
@@ -42186,7 +42186,9 @@ void main() {
           const widthText = readTextField(extras, "(G) width");
           const depthText = readTextField(extras, "(H) depth");
           const lengthText = readTextField(extras, "(I) length");
-          const tokenVotes = [widthText, depthText, lengthText].map(detectUnitToken);
+          const tokenVotes = [widthText, depthText, lengthText].map(
+            detectUnitToken,
+          );
           if (tokenVotes.some((token) => token === "in")) return "in";
           if (tokenVotes.some((token) => token === "mm")) return "mm";
           const width = readNumberField(extras, "(G) width");
@@ -42518,7 +42520,10 @@ void main() {
             const decoder = new TextDecoder();
             const originalJsonText = decoder
               .decode(
-                sourceBytes.subarray(jsonChunkStart, jsonChunkStart + jsonChunkLength),
+                sourceBytes.subarray(
+                  jsonChunkStart,
+                  jsonChunkStart + jsonChunkLength,
+                ),
               )
               .replace(/\u0000+$/g, "")
               .trimEnd();
@@ -42534,7 +42539,11 @@ void main() {
             const resultView = new DataView(result.buffer);
             result.set(sourceBytes.subarray(0, jsonChunkHeaderStart), 0);
             resultView.setUint32(jsonChunkHeaderStart, paddedJsonLength, true);
-            resultView.setUint32(jsonChunkHeaderStart + 4, JSON_CHUNK_TYPE, true);
+            resultView.setUint32(
+              jsonChunkHeaderStart + 4,
+              JSON_CHUNK_TYPE,
+              true,
+            );
             const newJsonStart = jsonChunkHeaderStart + 8;
             result.set(slimJsonBytes, newJsonStart);
             for (
@@ -42703,7 +42712,9 @@ void main() {
             setStatus(`Writing output file: ${outputName}`);
             await writePackagedViewerHtml(outputFileHandle, packagedHtml);
             const packedKb = Math.round(packed.arrayBuffer.byteLength / 1024);
-            const sourceKb = Math.round(loadedModelArrayBuffer.byteLength / 1024);
+            const sourceKb = Math.round(
+              loadedModelArrayBuffer.byteLength / 1024,
+            );
             const slimKb = Math.round(slimmedModelBuffer.byteLength / 1024);
             setStatus(
               `Packaged: ${outputFileHandle.name || outputName} (${sourceKb}KB source -> ${slimKb}KB slim -> ${packedKb}KB embedded ${packed.encoding === "gzip" ? "gzip" : "raw"})`,
@@ -42754,7 +42765,8 @@ void main() {
             typeof window.supabase.createClient === "function" &&
             SUPABASE_URL &&
             SUPABASE_ANON_KEY &&
-            SUPABASE_ANON_KEY !== "REPLACE_WITH_SUPABASE_ANON_KEY"
+            SUPABASE_ANON_KEY !==
+              "sb_publishable_D11hU21IX1oohA6nMjhoGA_bY7eZNlb"
           );
         }
         function setAuthStateText(message) {
@@ -42782,16 +42794,17 @@ void main() {
             setStatus("Supabase is not configured in this viewer.");
             return;
           }
-          const email = String(authEmailEl && authEmailEl.value || "").trim();
+          const email = String((authEmailEl && authEmailEl.value) || "").trim();
           if (!email) {
             setStatus("Enter your email address first.");
             return;
           }
           const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-          const { error: signInError } = await supabaseClient.auth.signInWithOtp({
-            email,
-            options: { emailRedirectTo: redirectTo },
-          });
+          const { error: signInError } =
+            await supabaseClient.auth.signInWithOtp({
+              email,
+              options: { emailRedirectTo: redirectTo },
+            });
           if (signInError) {
             setStatus(`Sign-in failed: ${signInError.message}`);
             return;
@@ -42827,7 +42840,9 @@ void main() {
           if (!signedData || !signedData.signedUrl) {
             throw new Error("No signed URL returned.");
           }
-          const modelFileName = decodeURIComponent(path.split("/").pop() || path);
+          const modelFileName = decodeURIComponent(
+            path.split("/").pop() || path,
+          );
           loadModel(signedData.signedUrl, modelFileName);
         }
         async function loadEmbeddedModelIfPresent() {
@@ -42888,7 +42903,9 @@ void main() {
             return;
           }
           currentAuthUser =
-            sessionData && sessionData.session ? sessionData.session.user : null;
+            sessionData && sessionData.session
+              ? sessionData.session.user
+              : null;
           updateAuthUi(currentAuthUser);
           if (!currentAuthUser) {
             setManualOpenEnabled(false);
