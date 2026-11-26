@@ -50,8 +50,8 @@ serve(async (req) => {
     return jsonResponse(405, { error: "Method not allowed." });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = Deno.env.get("PROJECT_URL");
+  const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY");
   const viewerUrl = Deno.env.get("VIEWER_URL");
   const bucketName = Deno.env.get("PLANS_BUCKET") || "Plans";
   const adminEmails = parseAdminEmails(Deno.env.get("ADMIN_EMAILS"));
@@ -59,7 +59,7 @@ serve(async (req) => {
   if (!supabaseUrl || !serviceRoleKey || !viewerUrl) {
     return jsonResponse(500, {
       error:
-        "Missing required function secrets. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and VIEWER_URL.",
+        "Missing required function secrets. Set PROJECT_URL, SERVICE_ROLE_KEY and VIEWER_URL.",
     });
   }
 
