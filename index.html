@@ -60,6 +60,25 @@
         background: #24543a;
         color: #e8fff1;
       }
+      .auth-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #authEmail {
+        width: 220px;
+        max-width: 38vw;
+        padding: 6px 8px;
+        border: 1px solid #3b4e80;
+        border-radius: 6px;
+        background: #131a2a;
+        color: #dbe4ff;
+        font-size: 0.82rem;
+      }
+      #authState {
+        font-size: 0.78rem;
+        color: #9fb6ef;
+      }
       #modelInput {
         display: none;
       }
@@ -379,6 +398,21 @@
         <button id="labelToggle" type="button">Labels: ON</button>
         <span id="buildStepLabel">Build Plan: Overview</span>
       </div>
+      <div class="auth-controls">
+        <input
+          id="authEmail"
+          type="email"
+          placeholder="customer@email.com"
+          autocomplete="email"
+        />
+        <button id="authSignIn" class="toolbar-button" type="button">
+          Email Login Link
+        </button>
+        <button id="authSignOut" class="toolbar-button" type="button" hidden>
+          Sign Out
+        </button>
+        <span id="authState">Not signed in</span>
+      </div>
       <span id="status">Ready: Open a .glb file</span>
     </header>
 
@@ -396,6 +430,7 @@
         <ul id="partsList"></ul>
       </aside>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       (() => {
         // node_modules/three/build/three.core.js
@@ -41957,6 +41992,10 @@ void main() {
         var viewerEl = document.getElementById("viewer");
         var inputEl = document.getElementById("modelInput");
         var openProjectButtonEl = document.getElementById("openProjectButton");
+        var authEmailEl = document.getElementById("authEmail");
+        var authSignInEl = document.getElementById("authSignIn");
+        var authSignOutEl = document.getElementById("authSignOut");
+        var authStateEl = document.getElementById("authState");
         var statusEl = document.getElementById("status");
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
@@ -42037,6 +42076,11 @@ void main() {
         var currentObjectUrl = null;
         var loadedModelFileName = "";
         var loadedModelArrayBuffer = null;
+        var SUPABASE_URL = "https://pzcyhagbergybdtwyahs.supabase.co";
+        var SUPABASE_ANON_KEY = "REPLACE_WITH_SUPABASE_ANON_KEY";
+        var SUPABASE_BUCKET = "Plans";
+        var supabaseClient = null;
+        var currentAuthUser = null;
         var EMBEDDED_MODEL_BASE64 = null;
         var EMBEDDED_MODEL_NAME = "";
         var EMBEDDED_MODEL_ENCODING = "none";
@@ -42677,15 +42721,16 @@ void main() {
             console.error("Package error:", error2);
           }
         }
-        function getModelQueryParam() {
-          let rawValue = "";
+        function getRequestedModelValue() {
           try {
             const params = new URLSearchParams(window.location.search);
-            rawValue = String(params.get("model") || "").trim();
+            return String(params.get("model") || "").trim();
           } catch (error2) {
             console.warn("Query parse warning:", error2);
-            return null;
+            return "";
           }
+        }
+        function parsePublicModelUrl(rawValue) {
           if (!rawValue) return null;
           try {
             const resolvedUrl = new URL(rawValue, window.location.href);
@@ -42693,30 +42738,179 @@ void main() {
               resolvedUrl.protocol !== "http:" &&
               resolvedUrl.protocol !== "https:"
             ) {
-              throw new Error("Unsupported model URL protocol.");
+              return null;
             }
             const fileName = decodeURIComponent(
               resolvedUrl.pathname.split("/").pop() || rawValue,
             );
             return { url: resolvedUrl.href, fileName };
           } catch (error2) {
-            const message = getErrorMessage(error2, "Invalid model URL.");
-            setStatus(`Invalid model query parameter: ${message}`);
-            console.error("Model query parameter error:", error2);
             return null;
           }
         }
+        function isSupabaseConfigured() {
+          return (
+            typeof window.supabase === "object" &&
+            typeof window.supabase.createClient === "function" &&
+            SUPABASE_URL &&
+            SUPABASE_ANON_KEY &&
+            SUPABASE_ANON_KEY !== "REPLACE_WITH_SUPABASE_ANON_KEY"
+          );
+        }
+        function setAuthStateText(message) {
+          if (authStateEl) authStateEl.textContent = message;
+        }
+        function setManualOpenEnabled(isEnabled) {
+          inputEl.disabled = !isEnabled;
+          if (openProjectButtonEl)
+            openProjectButtonEl.style.display = isEnabled ? "" : "none";
+        }
+        function updateAuthUi(user) {
+          if (!authSignInEl || !authSignOutEl || !authEmailEl) return;
+          const isSignedIn = Boolean(user);
+          authSignInEl.hidden = isSignedIn;
+          authEmailEl.hidden = isSignedIn;
+          authSignOutEl.hidden = !isSignedIn;
+          setAuthStateText(
+            isSignedIn
+              ? `Signed in: ${user.email || "Account"}`
+              : "Not signed in",
+          );
+        }
+        async function signInWithEmailLink() {
+          if (!supabaseClient) {
+            setStatus("Supabase is not configured in this viewer.");
+            return;
+          }
+          const email = String(authEmailEl && authEmailEl.value || "").trim();
+          if (!email) {
+            setStatus("Enter your email address first.");
+            return;
+          }
+          const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+          const { error: signInError } = await supabaseClient.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: redirectTo },
+          });
+          if (signInError) {
+            setStatus(`Sign-in failed: ${signInError.message}`);
+            return;
+          }
+          setStatus(`Login link sent to ${email}. Check your email.`);
+        }
+        async function signOutSupabase() {
+          if (!supabaseClient) return;
+          const { error: signOutError } = await supabaseClient.auth.signOut();
+          if (signOutError) {
+            setStatus(`Sign-out failed: ${signOutError.message}`);
+            return;
+          }
+          currentAuthUser = null;
+          updateAuthUi(null);
+          setManualOpenEnabled(false);
+          clearModel();
+          setStatus("Signed out. Sign in to open your plan.");
+        }
+        async function loadSupabasePrivateModel(modelPath) {
+          if (!supabaseClient) {
+            throw new Error("Supabase is not configured in this viewer.");
+          }
+          const path = String(modelPath || "").replace(/^\/+/, "");
+          if (!path) {
+            throw new Error("Missing model path.");
+          }
+          const { data: signedData, error: signedError } =
+            await supabaseClient.storage
+              .from(SUPABASE_BUCKET)
+              .createSignedUrl(path, 60 * 15);
+          if (signedError) throw signedError;
+          if (!signedData || !signedData.signedUrl) {
+            throw new Error("No signed URL returned.");
+          }
+          const modelFileName = decodeURIComponent(path.split("/").pop() || path);
+          loadModel(signedData.signedUrl, modelFileName);
+        }
         async function loadEmbeddedModelIfPresent() {
-          const modelQuery = getModelQueryParam();
-          if (!modelQuery) {
-            inputEl.disabled = false;
-            if (openProjectButtonEl) openProjectButtonEl.style.display = "";
+          const requestedModel = getRequestedModelValue();
+          const publicModel = parsePublicModelUrl(requestedModel);
+          if (publicModel) {
+            setManualOpenEnabled(false);
+            setAuthStateText("Public link mode");
+            loadModel(publicModel.url, publicModel.fileName);
+            return;
+          }
+          const hasSupabaseModelPath = Boolean(requestedModel);
+          if (!isSupabaseConfigured()) {
+            updateAuthUi(null);
+            if (hasSupabaseModelPath) {
+              setManualOpenEnabled(false);
+              setStatus(
+                "Viewer auth is not configured. Add your Supabase anon key in index.html.",
+              );
+              return;
+            }
+            setManualOpenEnabled(true);
             setStatus("Ready: Open a .glb file");
             return;
           }
-          inputEl.disabled = true;
-          if (openProjectButtonEl) openProjectButtonEl.style.display = "none";
-          loadModel(modelQuery.url, modelQuery.fileName);
+          supabaseClient = window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_ANON_KEY,
+          );
+          supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+            currentAuthUser = session && session.user ? session.user : null;
+            updateAuthUi(currentAuthUser);
+            if (!currentAuthUser) {
+              setManualOpenEnabled(false);
+              return;
+            }
+            if (hasSupabaseModelPath) {
+              setManualOpenEnabled(false);
+              try {
+                await loadSupabasePrivateModel(requestedModel);
+              } catch (error2) {
+                const message = getErrorMessage(
+                  error2,
+                  "Could not load private model.",
+                );
+                setStatus(`Private model load failed: ${message}`);
+                console.error("Private model load error:", error2);
+              }
+            } else {
+              setManualOpenEnabled(true);
+              setStatus("Signed in. Ready: Open a .glb file");
+            }
+          });
+          const { data: sessionData, error: sessionError } =
+            await supabaseClient.auth.getSession();
+          if (sessionError) {
+            setStatus(`Session check failed: ${sessionError.message}`);
+            return;
+          }
+          currentAuthUser =
+            sessionData && sessionData.session ? sessionData.session.user : null;
+          updateAuthUi(currentAuthUser);
+          if (!currentAuthUser) {
+            setManualOpenEnabled(false);
+            setStatus("Sign in with email link to open your plan.");
+            return;
+          }
+          if (hasSupabaseModelPath) {
+            setManualOpenEnabled(false);
+            try {
+              await loadSupabasePrivateModel(requestedModel);
+            } catch (error2) {
+              const message = getErrorMessage(
+                error2,
+                "Could not load private model.",
+              );
+              setStatus(`Private model load failed: ${message}`);
+              console.error("Private model load error:", error2);
+            }
+            return;
+          }
+          setManualOpenEnabled(true);
+          setStatus("Signed in. Ready: Open a .glb file");
         }
         function applyStandaloneEmbeddedMode() {
           return;
@@ -43545,6 +43739,26 @@ ${line2}`,
             console.error("Model read error:", error2);
           }
         });
+        if (authSignInEl)
+          authSignInEl.addEventListener("click", async () => {
+            try {
+              await signInWithEmailLink();
+            } catch (error2) {
+              const message = getErrorMessage(error2, "Sign-in failed.");
+              setStatus(`Sign-in failed: ${message}`);
+              console.error("Sign-in error:", error2);
+            }
+          });
+        if (authSignOutEl)
+          authSignOutEl.addEventListener("click", async () => {
+            try {
+              await signOutSupabase();
+            } catch (error2) {
+              const message = getErrorMessage(error2, "Sign-out failed.");
+              setStatus(`Sign-out failed: ${message}`);
+              console.error("Sign-out error:", error2);
+            }
+          });
         lightIntensityEl.addEventListener("input", applyLightingControls);
         shadowOpacityEl.addEventListener("input", applyLightingControls);
         shadowSoftnessEl.addEventListener("input", applyLightingControls);
@@ -43606,6 +43820,8 @@ ${line2}`,
         buildModeToggleEl.textContent = "Build It: ON";
         labelToggleEl.classList.add("active");
         labelToggleEl.textContent = "Labels: ON";
+        updateAuthUi(null);
+        setManualOpenEnabled(false);
         applyStandaloneEmbeddedMode();
         animate();
         applyLightingControls();
