@@ -100,7 +100,9 @@
             autocomplete="email"
             placeholder="you@kdmodels.co.uk"
           />
-          <button id="adminLoginBtn" type="button">Send Admin Login Link</button>
+          <button id="adminLoginBtn" type="button">
+            Send Admin Login Link
+          </button>
           <button id="adminSignOutBtn" type="button" hidden>Sign Out</button>
           <div id="adminState" class="hint">Not signed in</div>
         </div>
@@ -136,8 +138,12 @@
         <div>
           <textarea id="magicLink" readonly></textarea>
           <div class="actions">
-            <button id="copyMagicBtn" type="button" disabled>Copy Magic Link</button>
-            <button id="emailMagicBtn" type="button" disabled>Email Customer</button>
+            <button id="copyMagicBtn" type="button" disabled>
+              Copy Magic Link
+            </button>
+            <button id="emailMagicBtn" type="button" disabled>
+              Email Customer
+            </button>
           </div>
         </div>
       </div>
@@ -147,7 +153,9 @@
         <div>
           <textarea id="viewerLink" readonly></textarea>
           <div class="actions">
-            <button id="copyViewerBtn" type="button" disabled>Copy Viewer Link</button>
+            <button id="copyViewerBtn" type="button" disabled>
+              Copy Viewer Link
+            </button>
           </div>
         </div>
       </div>
@@ -157,7 +165,8 @@
     <script>
       (() => {
         const SUPABASE_URL = "https://pzcyhagbergybdtwyahs.supabase.co";
-        const SUPABASE_ANON_KEY = "REPLACE_WITH_SUPABASE_ANON_KEY";
+        const SUPABASE_ANON_KEY =
+          "sb_publishable_D11hU21IX1oohA6nMjhoGA_bY7eZNlb";
         const SUPABASE_BUCKET = "Plans";
         const EDGE_FUNCTION_NAME = "provision-customer-plan";
 
@@ -288,7 +297,9 @@
               !functionData.modelPath ||
               !functionData.uploadToken
             ) {
-              throw new Error("Provisioning function returned invalid response.");
+              throw new Error(
+                "Provisioning function returned invalid response.",
+              );
             }
 
             setStatus("Uploading plan file...");
@@ -308,9 +319,10 @@
             );
             setStatus("Done. Copy magic link or open email draft.");
           } catch (error) {
-            const message = error && error.message
-              ? error.message
-              : "Unknown provisioning error";
+            const message =
+              error && error.message
+                ? error.message
+                : "Unknown provisioning error";
             setStatus(`Failed: ${message}`);
             console.error("Provisioning failure:", error);
           } finally {
