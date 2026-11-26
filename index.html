@@ -42121,6 +42121,64 @@ void main() {
           const value = Number(readCompactFieldValue(data, key));
           return Number.isFinite(value) ? value : null;
         }
+        function detectUnitToken(valueText) {
+          const text = String(valueText || "").trim().toLowerCase();
+          if (!text) return null;
+          if (/(^|[^a-z])mm($|[^a-z])/.test(text)) return "mm";
+          if (/(^|[^a-z])cm($|[^a-z])/.test(text)) return "mm";
+          if (/(^|[^a-z])(inch|inches|in)($|[^a-z])/.test(text)) return "in";
+          if (/"|′|″|'/.test(text)) return "in";
+          return null;
+        }
+        function isNearImperialFraction(value) {
+          if (!Number.isFinite(value)) return false;
+          const fractional = Math.abs(value - Math.trunc(value));
+          const quarter = Math.abs(fractional - 0.25) < 0.02;
+          const half = Math.abs(fractional - 0.5) < 0.02;
+          const threeQuarter = Math.abs(fractional - 0.75) < 0.02;
+          return quarter || half || threeQuarter;
+        }
+        function detectEntryDimensionUnit(extras) {
+          const widthText = readTextField(extras, "(G) width");
+          const depthText = readTextField(extras, "(H) depth");
+          const lengthText = readTextField(extras, "(I) length");
+          const tokenVotes = [widthText, depthText, lengthText].map(detectUnitToken);
+          if (tokenVotes.some((token) => token === "in")) return "in";
+          if (tokenVotes.some((token) => token === "mm")) return "mm";
+          const width = readNumberField(extras, "(G) width");
+          const depth = readNumberField(extras, "(H) depth");
+          const length = readNumberField(extras, "(I) length");
+          if (width === null || depth === null || length === null) return null;
+          const maxDimension = Math.max(width, depth, length);
+          if (maxDimension >= 300) return "mm";
+          if (width <= 24 && depth <= 24) return "in";
+          if (
+            width <= 48 &&
+            depth <= 48 &&
+            (isNearImperialFraction(width) ||
+              isNearImperialFraction(depth) ||
+              isNearImperialFraction(length))
+          )
+            return "in";
+          return "mm";
+        }
+        function detectModelDimensionUnit(entries) {
+          let imperialVotes = 0;
+          let metricVotes = 0;
+          entries.forEach((entry) => {
+            const unit = detectEntryDimensionUnit(entry.extras);
+            if (unit === "in") imperialVotes += 1;
+            else if (unit === "mm") metricVotes += 1;
+          });
+          if (imperialVotes > metricVotes) return "in";
+          return "mm";
+        }
+        function formatDimensionValue(value, unit) {
+          if (!Number.isFinite(value)) return "";
+          const precision = unit === "in" ? 2 : 1;
+          const rounded = Number(value.toFixed(precision));
+          return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+        }
         function getPanelLabelFromObjectName(objectName) {
           const rawName = (objectName || "").trim();
           if (!rawName) return "";
@@ -42128,12 +42186,17 @@ void main() {
           if (parts.length >= 3 && parts[2].trim()) return parts[2].trim();
           return rawName;
         }
-        function getPanelLabel(extras, objectName) {
+        function getPanelLabel(extras, objectName, defaultUnit = "mm") {
           const width = readNumberField(extras, "(G) width");
           const depth = readNumberField(extras, "(H) depth");
           const length = readNumberField(extras, "(I) length");
-          if (width !== null && depth !== null && length !== null)
-            return `${width}x${depth}x${length}mm`;
+          if (width !== null && depth !== null && length !== null) {
+            const unit = detectEntryDimensionUnit(extras) || defaultUnit;
+            const widthText = formatDimensionValue(width, unit);
+            const depthText = formatDimensionValue(depth, unit);
+            const lengthText = formatDimensionValue(length, unit);
+            return `${widthText}x${depthText}x${lengthText}${unit}`;
+          }
           return getPanelLabelFromObjectName(objectName);
         }
         function parseInstructionCode(code) {
@@ -43324,6 +43387,7 @@ ${line2}`,
           clearPartsList();
           let meshCount = 0;
           const fixingNamePattern = /(nail|screw|bolt|washer|fixing)/i;
+          let modelDimensionUnit = "mm";
           partEntries = [];
           allModelEntries = [];
           modelRoot.traverse((child) => {
@@ -43339,7 +43403,6 @@ ${line2}`,
               fixingNamePattern.test(displayName) || Boolean(fixingType);
             const instructionInfo = createInstructionSummary(extras);
             const memberName = readTextField(extras, "(C) member");
-            const listName = getPanelLabel(extras, displayName);
             const subAssemblyGroupName = readTextField(
               extras,
               "sub_assembly_group_name",
@@ -43355,7 +43418,7 @@ ${line2}`,
             const entry = {
               mesh: child,
               displayName,
-              listName,
+              listName: "",
               memberName,
               subAssemblyGroupKey,
               isSubAssemblyPart,
@@ -43367,6 +43430,16 @@ ${line2}`,
             };
             allModelEntries.push(entry);
             if (!isFixing) partEntries.push(entry);
+          });
+          modelDimensionUnit = detectModelDimensionUnit(
+            partEntries.length > 0 ? partEntries : allModelEntries,
+          );
+          allModelEntries.forEach((entry) => {
+            entry.listName = getPanelLabel(
+              entry.extras,
+              entry.displayName,
+              modelDimensionUnit,
+            );
           });
           partEntries.sort((a, b) => {
             const aSort = a.instructionInfo.sortKey;
