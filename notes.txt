@@ -1,1 +1,19 @@
-https://kevindean01.github.io/KDMPlansViewer/?model=jobs/Shed.kdm
+Viewer URL:
+https://kevindean01.github.io/KDMPlansViewer/
+
+Admin URL (after push):
+https://kevindean01.github.io/KDMPlansViewer/admin.html
+
+Set this in BOTH files:
+- index.html => SUPABASE_ANON_KEY
+- admin.html => SUPABASE_ANON_KEY
+
+Deploy Supabase edge function:
+supabase functions deploy provision-customer-plan --project-ref pzcyhagbergybdtwyahs
+
+Set function secrets:
+supabase secrets set SUPABASE_URL=https://pzcyhagbergybdtwyahs.supabase.co --project-ref pzcyhagbergybdtwyahs
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY --project-ref pzcyhagbergybdtwyahs
+supabase secrets set VIEWER_URL=https://kevindean01.github.io/KDMPlansViewer/ --project-ref pzcyhagbergybdtwyahs
+supabase secrets set PLANS_BUCKET=Plans --project-ref pzcyhagbergybdtwyahs
+supabase secrets set ADMIN_EMAILS=you@kdmodels.co.uk --project-ref pzcyhagbergybdtwyahs

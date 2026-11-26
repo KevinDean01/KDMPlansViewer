@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KDM Plans Admin Uploader</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        font-family: Arial, sans-serif;
+        background: #101218;
+        color: #eef4ff;
+      }
+      body {
+        display: grid;
+        place-items: start center;
+        padding: 18px;
+      }
+      .card {
+        width: min(860px, 100%);
+        background: #141a29;
+        border: 1px solid #2c3550;
+        border-radius: 10px;
+        padding: 16px;
+      }
+      h1 {
+        margin: 0 0 14px;
+        font-size: 1.15rem;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 170px 1fr;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .row label {
+        color: #bed0ff;
+        font-size: 0.9rem;
+      }
+      input,
+      button,
+      textarea {
+        border: 1px solid #3b4e80;
+        border-radius: 6px;
+        background: #101727;
+        color: #eef4ff;
+        font-size: 0.9rem;
+      }
+      input,
+      textarea {
+        padding: 8px;
+      }
+      button {
+        padding: 8px 10px;
+        background: #223253;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      .status {
+        margin: 8px 0 14px;
+        color: #c3d0ff;
+      }
+      .hint {
+        color: #9fb6ef;
+        font-size: 0.82rem;
+      }
+      textarea {
+        width: 100%;
+        min-height: 84px;
+        resize: vertical;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>KDM Plans Admin Uploader</h1>
+
+      <div class="row">
+        <label for="adminEmail">Admin email</label>
+        <div>
+          <input
+            id="adminEmail"
+            type="email"
+            autocomplete="email"
+            placeholder="you@kdmodels.co.uk"
+          />
+          <button id="adminLoginBtn" type="button">Send Admin Login Link</button>
+          <button id="adminSignOutBtn" type="button" hidden>Sign Out</button>
+          <div id="adminState" class="hint">Not signed in</div>
+        </div>
+      </div>
+
+      <hr style="border-color: #2c3550; opacity: 0.45" />
+
+      <div class="row">
+        <label for="customerEmail">Customer email</label>
+        <input
+          id="customerEmail"
+          type="email"
+          autocomplete="email"
+          placeholder="customer@email.com"
+        />
+      </div>
+
+      <div class="row">
+        <label for="modelFile">Plan file (.glb)</label>
+        <input id="modelFile" type="file" accept=".glb,model/gltf-binary" />
+      </div>
+
+      <div class="actions">
+        <button id="provisionBtn" type="button" disabled>
+          Create Access + Upload Plan
+        </button>
+      </div>
+
+      <div id="status" class="status">Sign in as admin to begin.</div>
+
+      <div class="row">
+        <label for="magicLink">Customer magic link</label>
+        <div>
+          <textarea id="magicLink" readonly></textarea>
+          <div class="actions">
+            <button id="copyMagicBtn" type="button" disabled>Copy Magic Link</button>
+            <button id="emailMagicBtn" type="button" disabled>Email Customer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label for="viewerLink">Viewer fallback link</label>
+        <div>
+          <textarea id="viewerLink" readonly></textarea>
+          <div class="actions">
+            <button id="copyViewerBtn" type="button" disabled>Copy Viewer Link</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+      (() => {
+        const SUPABASE_URL = "https://pzcyhagbergybdtwyahs.supabase.co";
+        const SUPABASE_ANON_KEY = "REPLACE_WITH_SUPABASE_ANON_KEY";
+        const SUPABASE_BUCKET = "Plans";
+        const EDGE_FUNCTION_NAME = "provision-customer-plan";
+
+        const adminEmailEl = document.getElementById("adminEmail");
+        const adminLoginBtn = document.getElementById("adminLoginBtn");
+        const adminSignOutBtn = document.getElementById("adminSignOutBtn");
+        const adminStateEl = document.getElementById("adminState");
+        const customerEmailEl = document.getElementById("customerEmail");
+        const modelFileEl = document.getElementById("modelFile");
+        const provisionBtn = document.getElementById("provisionBtn");
+        const statusEl = document.getElementById("status");
+        const magicLinkEl = document.getElementById("magicLink");
+        const viewerLinkEl = document.getElementById("viewerLink");
+        const copyMagicBtn = document.getElementById("copyMagicBtn");
+        const copyViewerBtn = document.getElementById("copyViewerBtn");
+        const emailMagicBtn = document.getElementById("emailMagicBtn");
+
+        function setStatus(message) {
+          statusEl.textContent = message;
+        }
+
+        function setSignedInUi(user) {
+          const isSignedIn = Boolean(user);
+          adminLoginBtn.hidden = isSignedIn;
+          adminSignOutBtn.hidden = !isSignedIn;
+          adminEmailEl.hidden = isSignedIn;
+          adminStateEl.textContent = isSignedIn
+            ? `Signed in: ${user.email || "Admin"}`
+            : "Not signed in";
+          provisionBtn.disabled = !isSignedIn;
+        }
+
+        function setResultLinks(magicLink, viewerLink, customerEmail) {
+          magicLinkEl.value = magicLink || "";
+          viewerLinkEl.value = viewerLink || "";
+          copyMagicBtn.disabled = !magicLink;
+          copyViewerBtn.disabled = !viewerLink;
+          emailMagicBtn.disabled = !magicLink || !customerEmail;
+        }
+
+        async function copyText(value) {
+          await navigator.clipboard.writeText(value);
+        }
+
+        if (
+          !window.supabase ||
+          typeof window.supabase.createClient !== "function" ||
+          !SUPABASE_URL ||
+          !SUPABASE_ANON_KEY ||
+          SUPABASE_ANON_KEY === "REPLACE_WITH_SUPABASE_ANON_KEY"
+        ) {
+          setStatus(
+            "Set SUPABASE_ANON_KEY in admin.html before using this tool.",
+          );
+          return;
+        }
+
+        const supabase = window.supabase.createClient(
+          SUPABASE_URL,
+          SUPABASE_ANON_KEY,
+        );
+
+        supabase.auth.onAuthStateChange((_event, session) => {
+          setSignedInUi(session && session.user ? session.user : null);
+        });
+
+        supabase.auth.getSession().then(({ data, error }) => {
+          if (error) {
+            setStatus(`Session check failed: ${error.message}`);
+            return;
+          }
+          setSignedInUi(data && data.session ? data.session.user : null);
+        });
+
+        adminLoginBtn.addEventListener("click", async () => {
+          const email = String(adminEmailEl.value || "").trim();
+          if (!email) {
+            setStatus("Enter your admin email address first.");
+            return;
+          }
+          const redirectTo = `${window.location.origin}${window.location.pathname}`;
+          const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: redirectTo },
+          });
+          if (error) {
+            setStatus(`Admin login failed: ${error.message}`);
+            return;
+          }
+          setStatus(`Admin login link sent to ${email}.`);
+        });
+
+        adminSignOutBtn.addEventListener("click", async () => {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            setStatus(`Sign out failed: ${error.message}`);
+            return;
+          }
+          setResultLinks("", "", "");
+          setStatus("Signed out.");
+        });
+
+        provisionBtn.addEventListener("click", async () => {
+          const customerEmail = String(customerEmailEl.value || "").trim();
+          const file = modelFileEl.files && modelFileEl.files[0];
+          if (!customerEmail) {
+            setStatus("Enter a customer email.");
+            return;
+          }
+          if (!file) {
+            setStatus("Choose a .glb file first.");
+            return;
+          }
+          provisionBtn.disabled = true;
+          setResultLinks("", "", "");
+          try {
+            setStatus("Creating customer access...");
+            const { data: functionData, error: functionError } =
+              await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+                body: {
+                  customerEmail,
+                  fileName: file.name,
+                },
+              });
+            if (functionError) throw functionError;
+            if (
+              !functionData ||
+              !functionData.modelPath ||
+              !functionData.uploadToken
+            ) {
+              throw new Error("Provisioning function returned invalid response.");
+            }
+
+            setStatus("Uploading plan file...");
+            const { error: uploadError } = await supabase.storage
+              .from(SUPABASE_BUCKET)
+              .uploadToSignedUrl(
+                functionData.modelPath,
+                functionData.uploadToken,
+                file,
+              );
+            if (uploadError) throw uploadError;
+
+            setResultLinks(
+              functionData.magicLink || "",
+              functionData.viewerLink || "",
+              customerEmail,
+            );
+            setStatus("Done. Copy magic link or open email draft.");
+          } catch (error) {
+            const message = error && error.message
+              ? error.message
+              : "Unknown provisioning error";
+            setStatus(`Failed: ${message}`);
+            console.error("Provisioning failure:", error);
+          } finally {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            provisionBtn.disabled = !(session && session.user);
+          }
+        });
+
+        copyMagicBtn.addEventListener("click", async () => {
+          try {
+            await copyText(magicLinkEl.value);
+            setStatus("Magic link copied.");
+          } catch (error) {
+            setStatus("Copy failed for magic link.");
+          }
+        });
+
+        copyViewerBtn.addEventListener("click", async () => {
+          try {
+            await copyText(viewerLinkEl.value);
+            setStatus("Viewer link copied.");
+          } catch (error) {
+            setStatus("Copy failed for viewer link.");
+          }
+        });
+
+        emailMagicBtn.addEventListener("click", () => {
+          const customerEmail = String(customerEmailEl.value || "").trim();
+          const magicLink = magicLinkEl.value;
+          const viewerLink = viewerLinkEl.value;
+          if (!customerEmail || !magicLink) return;
+          const subject = encodeURIComponent("Your 3D plan viewer access");
+          const body = encodeURIComponent(
+            [
+              "Hi,",
+              "",
+              "Use this secure login link to open your 3D plan:",
+              magicLink,
+              "",
+              "Fallback viewer link:",
+              viewerLink,
+              "",
+              "If prompted, sign in with this same email address.",
+            ].join("\n"),
+          );
+          window.location.href = `mailto:${encodeURIComponent(customerEmail)}?subject=${subject}&body=${body}`;
+        });
+      })();
+    </script>
+  </body>
+</html>
