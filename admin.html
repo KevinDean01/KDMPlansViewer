@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KDM Plans Admin Uploader</title>
+    <title>KDM Plans Access Manager</title>
     <style>
       * {
         box-sizing: border-box;
@@ -45,6 +45,7 @@
         font-size: 0.9rem;
       }
       input,
+      select,
       button,
       textarea {
         border: 1px solid #3b4e80;
@@ -54,6 +55,7 @@
         font-size: 0.9rem;
       }
       input,
+      select,
       textarea {
         padding: 8px;
       }
@@ -89,7 +91,7 @@
   </head>
   <body>
     <div class="card">
-      <h1>KDM Plans Admin Uploader</h1>
+      <h1>KDM Plans Access Manager</h1>
 
       <div class="row">
         <label for="adminEmail">Admin email</label>
@@ -121,13 +123,23 @@
       </div>
 
       <div class="row">
-        <label for="modelFile">Plan file (.glb)</label>
-        <input id="modelFile" type="file" accept=".glb,model/gltf-binary" />
+        <label for="planSelect">Plan</label>
+        <div>
+          <select id="planSelect"></select>
+          <div class="actions">
+            <button id="refreshPlansBtn" type="button" disabled>
+              Refresh Plan List
+            </button>
+          </div>
+          <div class="hint">
+            Add each plan once to the <code>plans</code> table, then assign it to customers.
+          </div>
+        </div>
       </div>
 
       <div class="actions">
         <button id="provisionBtn" type="button" disabled>
-          Create Access + Upload Plan
+          Assign Plan + Generate Customer Link
         </button>
       </div>
 
@@ -167,15 +179,16 @@
         const SUPABASE_URL = "https://pzcyhagbergybdtwyahs.supabase.co";
         const SUPABASE_ANON_KEY =
           "sb_publishable_D11hU21IX1oohA6nMjhoGA_bY7eZNlb";
-        const SUPABASE_BUCKET = "Plans";
-        const EDGE_FUNCTION_NAME = "provision-customer-plan";
+        const EDGE_LIST_PLANS_FUNCTION = "list-catalog-plans";
+        const EDGE_ASSIGN_FUNCTION = "assign-customer-plan";
 
         const adminEmailEl = document.getElementById("adminEmail");
         const adminLoginBtn = document.getElementById("adminLoginBtn");
         const adminSignOutBtn = document.getElementById("adminSignOutBtn");
         const adminStateEl = document.getElementById("adminState");
         const customerEmailEl = document.getElementById("customerEmail");
-        const modelFileEl = document.getElementById("modelFile");
+        const planSelectEl = document.getElementById("planSelect");
+        const refreshPlansBtn = document.getElementById("refreshPlansBtn");
         const provisionBtn = document.getElementById("provisionBtn");
         const statusEl = document.getElementById("status");
         const magicLinkEl = document.getElementById("magicLink");
@@ -184,19 +197,10 @@
         const copyViewerBtn = document.getElementById("copyViewerBtn");
         const emailMagicBtn = document.getElementById("emailMagicBtn");
 
+        let currentSessionUser = null;
+
         function setStatus(message) {
           statusEl.textContent = message;
-        }
-
-        function setSignedInUi(user) {
-          const isSignedIn = Boolean(user);
-          adminLoginBtn.hidden = isSignedIn;
-          adminSignOutBtn.hidden = !isSignedIn;
-          adminEmailEl.hidden = isSignedIn;
-          adminStateEl.textContent = isSignedIn
-            ? `Signed in: ${user.email || "Admin"}`
-            : "Not signed in";
-          provisionBtn.disabled = !isSignedIn;
         }
 
         function setResultLinks(magicLink, viewerLink, customerEmail) {
@@ -205,6 +209,38 @@
           copyMagicBtn.disabled = !magicLink;
           copyViewerBtn.disabled = !viewerLink;
           emailMagicBtn.disabled = !magicLink || !customerEmail;
+        }
+
+        function setSignedInUi(user) {
+          currentSessionUser = user;
+          const isSignedIn = Boolean(user);
+          adminLoginBtn.hidden = isSignedIn;
+          adminSignOutBtn.hidden = !isSignedIn;
+          adminEmailEl.hidden = isSignedIn;
+          adminStateEl.textContent = isSignedIn
+            ? `Signed in: ${user.email || "Admin"}`
+            : "Not signed in";
+          refreshPlansBtn.disabled = !isSignedIn;
+          provisionBtn.disabled = !isSignedIn || !planSelectEl.value;
+        }
+
+        function replacePlanOptions(plans) {
+          planSelectEl.innerHTML = "";
+          const defaultOption = document.createElement("option");
+          defaultOption.value = "";
+          defaultOption.textContent = plans.length
+            ? "Select a plan..."
+            : "No plans available";
+          planSelectEl.appendChild(defaultOption);
+          plans.forEach((plan) => {
+            const option = document.createElement("option");
+            option.value = plan.id;
+            option.textContent = `${plan.name} (${plan.storage_path})`;
+            option.title = plan.storage_path;
+            planSelectEl.appendChild(option);
+          });
+          provisionBtn.disabled =
+            !currentSessionUser || !planSelectEl.value || plans.length === 0;
         }
 
         async function copyText(value) {
@@ -229,16 +265,54 @@
           SUPABASE_ANON_KEY,
         );
 
-        supabase.auth.onAuthStateChange((_event, session) => {
+        async function loadPlansForAdmin() {
+          if (!currentSessionUser) {
+            replacePlanOptions([]);
+            return;
+          }
+          setStatus("Loading plans...");
+          const { data, error } = await supabase.functions.invoke(
+            EDGE_LIST_PLANS_FUNCTION,
+            {
+              body: {},
+            },
+          );
+          if (error) {
+            setStatus(`Failed to load plans: ${error.message}`);
+            return;
+          }
+          const plans = Array.isArray(data && data.plans) ? data.plans : [];
+          replacePlanOptions(plans);
+          if (plans.length === 0) {
+            setStatus(
+              "No plans in catalog. Add rows to public.plans in Supabase first.",
+            );
+            return;
+          }
+          setStatus("Ready to assign plan access.");
+        }
+
+        supabase.auth.onAuthStateChange(async (_event, session) => {
           setSignedInUi(session && session.user ? session.user : null);
+          if (session && session.user) {
+            await loadPlansForAdmin();
+          } else {
+            replacePlanOptions([]);
+            setStatus("Sign in as admin to begin.");
+          }
         });
 
-        supabase.auth.getSession().then(({ data, error }) => {
+        supabase.auth.getSession().then(async ({ data, error }) => {
           if (error) {
             setStatus(`Session check failed: ${error.message}`);
             return;
           }
           setSignedInUi(data && data.session ? data.session.user : null);
+          if (data && data.session && data.session.user) {
+            await loadPlansForAdmin();
+          } else {
+            replacePlanOptions([]);
+          }
         });
 
         adminLoginBtn.addEventListener("click", async () => {
@@ -266,70 +340,55 @@
             return;
           }
           setResultLinks("", "", "");
+          replacePlanOptions([]);
           setStatus("Signed out.");
+        });
+
+        refreshPlansBtn.addEventListener("click", async () => {
+          await loadPlansForAdmin();
+        });
+
+        planSelectEl.addEventListener("change", () => {
+          provisionBtn.disabled = !currentSessionUser || !planSelectEl.value;
         });
 
         provisionBtn.addEventListener("click", async () => {
           const customerEmail = String(customerEmailEl.value || "").trim();
-          const file = modelFileEl.files && modelFileEl.files[0];
+          const planId = String(planSelectEl.value || "").trim();
           if (!customerEmail) {
             setStatus("Enter a customer email.");
             return;
           }
-          if (!file) {
-            setStatus("Choose a .glb file first.");
+          if (!planId) {
+            setStatus("Choose a plan first.");
             return;
           }
           provisionBtn.disabled = true;
           setResultLinks("", "", "");
           try {
-            setStatus("Creating customer access...");
-            const { data: functionData, error: functionError } =
-              await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+            setStatus("Assigning plan access and generating magic link...");
+            const { data, error } = await supabase.functions.invoke(
+              EDGE_ASSIGN_FUNCTION,
+              {
                 body: {
                   customerEmail,
-                  fileName: file.name,
+                  planId,
                 },
-              });
-            if (functionError) throw functionError;
-            if (
-              !functionData ||
-              !functionData.modelPath ||
-              !functionData.uploadToken
-            ) {
-              throw new Error(
-                "Provisioning function returned invalid response.",
-              );
-            }
-
-            setStatus("Uploading plan file...");
-            const { error: uploadError } = await supabase.storage
-              .from(SUPABASE_BUCKET)
-              .uploadToSignedUrl(
-                functionData.modelPath,
-                functionData.uploadToken,
-                file,
-              );
-            if (uploadError) throw uploadError;
-
-            setResultLinks(
-              functionData.magicLink || "",
-              functionData.viewerLink || "",
-              customerEmail,
+              },
             );
+            if (error) throw error;
+            if (!data || !data.magicLink || !data.viewerLink) {
+              throw new Error("Assign function returned invalid response.");
+            }
+            setResultLinks(data.magicLink, data.viewerLink, customerEmail);
             setStatus("Done. Copy magic link or open email draft.");
           } catch (error) {
             const message =
-              error && error.message
-                ? error.message
-                : "Unknown provisioning error";
+              error && error.message ? error.message : "Unknown assign error";
             setStatus(`Failed: ${message}`);
-            console.error("Provisioning failure:", error);
+            console.error("Assign failure:", error);
           } finally {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            provisionBtn.disabled = !(session && session.user);
+            provisionBtn.disabled = !currentSessionUser || !planSelectEl.value;
           }
         });
 
@@ -337,7 +396,7 @@
           try {
             await copyText(magicLinkEl.value);
             setStatus("Magic link copied.");
-          } catch (error) {
+          } catch (_error) {
             setStatus("Copy failed for magic link.");
           }
         });
@@ -346,7 +405,7 @@
           try {
             await copyText(viewerLinkEl.value);
             setStatus("Viewer link copied.");
-          } catch (error) {
+          } catch (_error) {
             setStatus("Copy failed for viewer link.");
           }
         });

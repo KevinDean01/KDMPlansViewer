@@ -8,12 +8,23 @@ Set this in BOTH files:
 - index.html => SUPABASE_ANON_KEY
 - admin.html => SUPABASE_ANON_KEY
 
-Deploy Supabase edge function:
-supabase functions deploy provision-customer-plan --project-ref pzcyhagbergybdtwyahs
+Run SQL setup in Supabase SQL Editor:
+- supabase/sql/setup_catalog_access.sql
+
+Deploy Supabase edge functions:
+supabase functions deploy get-customer-plan-link --remote=pzcyhagbergybdtwyahs --yes
+supabase functions deploy list-catalog-plans --remote=pzcyhagbergybdtwyahs --yes
+supabase functions deploy assign-customer-plan --remote=pzcyhagbergybdtwyahs --yes
 
 Set function secrets:
-supabase secrets set PROJECT_URL=https://pzcyhagbergybdtwyahs.supabase.co --project-ref pzcyhagbergybdtwyahs
-supabase secrets set SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY --project-ref pzcyhagbergybdtwyahs
-supabase secrets set VIEWER_URL=https://kevindean01.github.io/KDMPlansViewer/ --project-ref pzcyhagbergybdtwyahs
-supabase secrets set PLANS_BUCKET=Plans --project-ref pzcyhagbergybdtwyahs
-supabase secrets set ADMIN_EMAILS=you@kdmodels.co.uk --project-ref pzcyhagbergybdtwyahs
+supabase secrets set PROJECT_URL=https://pzcyhagbergybdtwyahs.supabase.co --remote=pzcyhagbergybdtwyahs --yes
+supabase secrets set SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY --remote=pzcyhagbergybdtwyahs --yes
+supabase secrets set VIEWER_URL=https://kevindean01.github.io/KDMPlansViewer/ --remote=pzcyhagbergybdtwyahs --yes
+supabase secrets set PLANS_BUCKET=Plans --remote=pzcyhagbergybdtwyahs --yes
+supabase secrets set ADMIN_EMAILS=you@kdmodels.co.uk --remote=pzcyhagbergybdtwyahs --yes
+
+Add one copy per plan in bucket:
+- Plans/catalog/<file>.glb
+
+Add plan rows:
+- insert into public.plans (name, storage_path) values ('Koi Pool v1', 'catalog/koi-pool-v1.glb');

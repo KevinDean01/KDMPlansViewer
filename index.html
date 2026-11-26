@@ -42843,26 +42843,26 @@ void main() {
           clearModel();
           setStatus("Signed out. Sign in to open your plan.");
         }
-        async function loadSupabasePrivateModel(modelPath) {
+        async function loadSupabasePrivateModel(planId) {
           if (!supabaseClient) {
             throw new Error("Supabase is not configured in this viewer.");
           }
-          const path = String(modelPath || "").replace(/^\/+/, "");
-          if (!path) {
-            throw new Error("Missing model path.");
+          const parsedPlanId = String(planId || "").trim();
+          if (!parsedPlanId) {
+            throw new Error("Missing plan id.");
           }
-          const { data: signedData, error: signedError } =
-            await supabaseClient.storage
-              .from(SUPABASE_BUCKET)
-              .createSignedUrl(path, 60 * 15);
-          if (signedError) throw signedError;
-          if (!signedData || !signedData.signedUrl) {
-            throw new Error("No signed URL returned.");
+          const { data: functionData, error: functionError } =
+            await supabaseClient.functions.invoke("get-customer-plan-link", {
+              body: { planId: parsedPlanId },
+            });
+          if (functionError) throw functionError;
+          if (!functionData || !functionData.signedUrl) {
+            throw new Error("No signed plan URL returned.");
           }
           const modelFileName = decodeURIComponent(
-            path.split("/").pop() || path,
+            functionData.fileName || functionData.planName || "plan.glb",
           );
-          loadModel(signedData.signedUrl, modelFileName);
+          loadModel(functionData.signedUrl, modelFileName);
         }
         async function loadEmbeddedModelIfPresent() {
           const requestedModel = getRequestedModelValue();
