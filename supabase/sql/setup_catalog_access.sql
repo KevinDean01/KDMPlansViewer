@@ -40,6 +40,10 @@ with check (false);
 create index if not exists idx_customer_plan_access_user_plan
 on public.customer_plan_access(customer_user_id, plan_id);
 
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.plans to service_role;
+grant select, insert, update, delete on table public.customer_plan_access to service_role;
+
 -- Example:
 -- insert into public.plans (name, storage_path)
 -- values ('Shed Plan A', 'catalog/shed-plan-a.glb');
