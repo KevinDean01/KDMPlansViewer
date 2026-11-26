@@ -42646,9 +42646,13 @@ void main() {
         async function loadEmbeddedModelIfPresent() {
           const modelQuery = getModelQueryParam();
           if (!modelQuery) {
+            inputEl.disabled = false;
+            if (openProjectButtonEl) openProjectButtonEl.style.display = "";
             setStatus("Ready: Open a .glb file");
             return;
           }
+          inputEl.disabled = true;
+          if (openProjectButtonEl) openProjectButtonEl.style.display = "none";
           loadModel(modelQuery.url, modelQuery.fileName);
         }
         function applyStandaloneEmbeddedMode() {
