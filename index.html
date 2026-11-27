@@ -429,7 +429,7 @@
         <button id="labelToggle" type="button">Labels: ON</button>
         <span id="buildStepLabel">Build Plan: Overview</span>
       </div>
-      <span id="status">Ready: Open a model file</span>
+      <span id="status">Ready: Open a kdm model file</span>
     </header>
 
     <main>
@@ -1031,7 +1031,7 @@
           if (!modelQuery) {
             inputEl.disabled = false;
             if (openProjectButtonEl) openProjectButtonEl.style.display = "";
-            setStatus("Ready: Open a .glb file");
+            setStatus("Ready: Open a kdm model file");
             return;
           }
           inputEl.disabled = true;
