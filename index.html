@@ -455,6 +455,43 @@
         color: var(--color-step-label-text);
         line-height: 1.2;
       }
+      #partsList .part-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #partsList .part-text {
+        flex: 1;
+        min-width: 0;
+      }
+      .part-visibility {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 30px;
+        height: 30px;
+        padding: 5px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #9ca3af;
+        cursor: pointer;
+      }
+      .part-visibility:hover {
+        border-color: var(--color-control-border);
+        background: rgba(255, 255, 255, 0.12);
+        color: #f3f4f6;
+      }
+      .part-visibility svg {
+        width: 18px;
+        height: 18px;
+      }
+      .part-visibility[data-visible="true"] .eye-slash {
+        display: none;
+      }
+      .part-visibility[data-visible="false"] {
+        color: #6b7280;
+      }
       #partsList li:hover {
         border-color: var(--color-part-item-hover-border);
       }
@@ -2177,7 +2214,7 @@ ${line2}`,
         function updateBuildItListFiltering(
           currentStepEntries = /* @__PURE__ */ new Set(),
         ) {
-          if (!buildItModeEnabled) {
+          if (!buildItModeEnabled || getActiveBuildSteps().length === 0) {
             partEntries.forEach((entry) => {
               if (entry.row) entry.row.classList.remove("step-list-hidden");
             });
@@ -2185,8 +2222,7 @@ ${line2}`,
           }
           partEntries.forEach((entry) => {
             if (!entry.row) return;
-            const showInList =
-              currentStepEntries.has(entry) && entry.mesh.visible;
+            const showInList = currentStepEntries.has(entry);
             entry.row.classList.toggle("step-list-hidden", !showInList);
           });
         }
@@ -2251,13 +2287,14 @@ ${line2}`,
           const hasSteps = activeSteps.length > 0;
           if (!hasSteps) {
             allModelEntries.forEach((entry) => {
-              entry.mesh.visible = true;
+              entry.mesh.visible = entry.manuallyVisible;
               if (entry.row)
                 entry.row.classList.remove("step-hidden", "step-current");
             });
+            if (selectedPartMesh && !selectedPartMesh.visible) clearSelection();
             applyStepHighlights(
               /* @__PURE__ */ new Set(),
-              !buildItModeEnabled ? selectedPartMesh : null,
+              selectedPartMesh,
             );
             updateBuildItListFiltering(/* @__PURE__ */ new Set());
             refreshLeaderLabel();
@@ -2271,9 +2308,9 @@ ${line2}`,
                 : /* @__PURE__ */ new Set();
             const hideFixingsForFabrication = buildPlanPhaseMode === "FAB";
             allModelEntries.forEach((entry) => {
-              entry.mesh.visible = hideFixingsForFabrication
-                ? !entry.isFixing
-                : true;
+              entry.mesh.visible =
+                entry.manuallyVisible &&
+                (!hideFixingsForFabrication || !entry.isFixing);
               if (entry.row) {
                 entry.row.classList.remove("step-hidden");
                 entry.row.classList.toggle(
@@ -2282,6 +2319,7 @@ ${line2}`,
                 );
               }
             });
+            if (selectedPartMesh && !selectedPartMesh.visible) clearSelection();
             applyStepHighlights(currentStepEntries2, selectedPartMesh);
             updateBuildItListFiltering(currentStepEntries2);
             refreshLeaderLabel();
@@ -2325,7 +2363,7 @@ ${line2}`,
           }
           allModelEntries.forEach((entry) => {
             const isVisible = visibleEntries.has(entry);
-            entry.mesh.visible = isVisible;
+            entry.mesh.visible = isVisible && entry.manuallyVisible;
             if (entry.row) {
               entry.row.classList.toggle("step-hidden", !isVisible);
               entry.row.classList.toggle(
@@ -2396,6 +2434,7 @@ ${line2}`,
               extras,
               isFixing,
               instructionInfo,
+              manuallyVisible: true,
               stepKeys: /* @__PURE__ */ new Set(),
               row: null,
             };
@@ -2438,11 +2477,37 @@ ${line2}`,
             const nameEl = document.createElement("div");
             nameEl.className = "part-name";
             nameEl.textContent = entry.memberName || entry.displayName;
-            row.appendChild(nameEl);
             const sizeEl = document.createElement("div");
             sizeEl.className = "part-size";
             sizeEl.textContent = entry.listName;
-            row.appendChild(sizeEl);
+            const textEl = document.createElement("div");
+            textEl.className = "part-text";
+            textEl.appendChild(nameEl);
+            textEl.appendChild(sizeEl);
+            row.classList.add("part-row");
+            row.appendChild(textEl);
+            const visibilityButton = document.createElement("button");
+            visibilityButton.type = "button";
+            visibilityButton.className = "part-visibility";
+            visibilityButton.innerHTML =
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M4 4l16 16"/></svg>';
+            const updateVisibilityButton = () => {
+              const action = entry.manuallyVisible ? "Hide" : "Show";
+              visibilityButton.setAttribute(
+                "aria-label",
+                `${action} ${entry.memberName || entry.displayName}`,
+              );
+              visibilityButton.dataset.visible = String(entry.manuallyVisible);
+              visibilityButton.title = `${action} component`;
+            };
+            updateVisibilityButton();
+            visibilityButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              entry.manuallyVisible = !entry.manuallyVisible;
+              updateVisibilityButton();
+              applyBuildPlanStep();
+            });
+            row.appendChild(visibilityButton);
             row.addEventListener("click", () => selectPart(entry.mesh, row));
             partsListEl.appendChild(row);
           });
