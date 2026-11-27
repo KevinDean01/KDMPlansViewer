@@ -228,6 +228,48 @@
         grid-row: 1;
         width: 100%;
         height: 100%;
+        min-width: 0;
+        min-height: 0;
+      }
+      #viewerSplit {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      #viewerSplit.pdf-open {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 40%);
+      }
+      #renderPanel {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+      }
+      #pdfPanel {
+        display: none;
+        border-left: 1px solid var(--color-toolbar-border);
+        background: #ffffff;
+      }
+      #viewerSplit.pdf-open #pdfPanel {
+        display: block;
+      }
+      #pdfFrame {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #ffffff;
+      }
+      #openPdfButton.hidden {
+        display: none;
+      }
+      #pdfInput {
+        display: none;
+      }
+      #viewer {
         position: relative;
       }
       .viewer-nav-button {
@@ -374,9 +416,13 @@
     <header class="toolbar">
       <h1>KDM Garden Plans Viewer</h1>
       <label id="openProjectButton" class="file-button" for="modelInput"
-        >Open Project</label
+        >Open KDM Model</label
       >
       <input id="modelInput" type="file" accept="*/*" />
+      <label id="openPdfButton" class="file-button" for="pdfInput"
+        >Open PDF Plans</label
+      >
+      <input id="pdfInput" type="file" accept="application/pdf,.pdf" />
       <button id="settingsToggle" class="toolbar-button" type="button">
         Settings
       </button>
@@ -434,12 +480,19 @@
 
     <main>
       <div id="viewer">
-        <button id="buildPrev" class="viewer-nav-button left" type="button">
-          Previous Step
-        </button>
-        <button id="buildNext" class="viewer-nav-button right" type="button">
-          Next Step
-        </button>
+        <div id="viewerSplit">
+          <div id="renderPanel">
+            <button id="buildPrev" class="viewer-nav-button left" type="button">
+              Previous Step
+            </button>
+            <button id="buildNext" class="viewer-nav-button right" type="button">
+              Next Step
+            </button>
+          </div>
+          <aside id="pdfPanel">
+            <iframe id="pdfFrame" title="PDF plans viewer"></iframe>
+          </aside>
+        </div>
       </div>
       <aside id="partsPanel">
         <h2>Components</h2>
@@ -482,9 +535,13 @@
           WebGLRenderer,
         } = THREE;
         // .KDM Garden Plans Viewer-entry.mjs
-        var viewerEl = document.getElementById("viewer");
+        var viewerSplitEl = document.getElementById("viewerSplit");
+        var renderPanelEl = document.getElementById("renderPanel");
         var inputEl = document.getElementById("modelInput");
+        var pdfInputEl = document.getElementById("pdfInput");
         var openProjectButtonEl = document.getElementById("openProjectButton");
+        var pdfPanelEl = document.getElementById("pdfPanel");
+        var pdfFrameEl = document.getElementById("pdfFrame");
         var statusEl = document.getElementById("status");
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
@@ -537,7 +594,7 @@
         scene.background = new Color(themeColors.sceneBackground);
         var camera = new PerspectiveCamera(
           60,
-          viewerEl.clientWidth / viewerEl.clientHeight,
+          renderPanelEl.clientWidth / renderPanelEl.clientHeight,
           0.1,
           1e3,
         );
@@ -549,14 +606,19 @@
         renderer.setPixelRatio(
           Math.min(window.devicePixelRatio || 1, isAppleMobile ? 1.5 : 2),
         );
-        renderer.setSize(viewerEl.clientWidth, viewerEl.clientHeight);
+        renderer.setSize(renderPanelEl.clientWidth, renderPanelEl.clientHeight);
         renderer.outputColorSpace = SRGBColorSpace;
         renderer.shadowMap.enabled = !isAppleMobile;
         renderer.shadowMap.type = PCFSoftShadowMap;
-        viewerEl.appendChild(renderer.domElement);
+        renderPanelEl.appendChild(renderer.domElement);
         renderer.domElement.addEventListener("webglcontextlost", (event) => {
           event.preventDefault();
           setStatus("WebGL context lost. Try reloading this page.");
+        });
+        pdfInputEl.addEventListener("change", (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+          loadPdfPlansFromFile(file);
         });
         var controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -594,6 +656,7 @@
         loader.setDRACOLoader(dracoLoader);
         var activeModel = null;
         var currentObjectUrl = null;
+        var currentPdfObjectUrl = null;
         var loadedModelFileName = "";
         var loadedModelArrayBuffer = null;
         var EMBEDDED_MODEL_BASE64 = null;
@@ -654,8 +717,36 @@
         labelBoxEl.className = "viewer-label";
         labelOverlayEl.appendChild(labelSvgEl);
         labelOverlayEl.appendChild(labelBoxEl);
-        viewerEl.appendChild(labelOverlayEl);
+        renderPanelEl.appendChild(labelOverlayEl);
         hideLeaderLabel();
+        function resizeRendererToRenderPanel() {
+          const width = Math.max(1, renderPanelEl.clientWidth);
+          const height = Math.max(1, renderPanelEl.clientHeight);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+          updateHighlightMaterialResolution();
+          refreshLeaderLabel();
+        }
+        function setPdfPanelOpen(isOpen) {
+          if (!viewerSplitEl) return;
+          viewerSplitEl.classList.toggle("pdf-open", !!isOpen);
+          if (pdfPanelEl) pdfPanelEl.style.display = isOpen ? "block" : "none";
+          requestAnimationFrame(resizeRendererToRenderPanel);
+        }
+        function loadPdfPlansFromFile(file) {
+          if (!file) return;
+          if (currentPdfObjectUrl) {
+            URL.revokeObjectURL(currentPdfObjectUrl);
+            currentPdfObjectUrl = null;
+          }
+          currentPdfObjectUrl = URL.createObjectURL(file);
+          if (pdfFrameEl) {
+            pdfFrameEl.src = currentPdfObjectUrl;
+          }
+          setPdfPanelOpen(true);
+          setStatus(`Loaded PDF plans: ${file.name}`);
+        }
         function getNodeExtras(node) {
           if (
             !node ||
@@ -1063,8 +1154,8 @@
           updateBuildPlanControls();
         }
         function updateHighlightMaterialResolution() {
-          const width = Math.max(1, viewerEl.clientWidth);
-          const height = Math.max(1, viewerEl.clientHeight);
+          const width = Math.max(1, renderPanelEl.clientWidth);
+          const height = Math.max(1, renderPanelEl.clientHeight);
           stepHighlightOverlays.forEach((overlayGroup) => {
             overlayGroup.children.forEach((edgeLines) => {
               const edgeMaterial = edgeLines.material;
@@ -1112,8 +1203,8 @@
               toneMapped: false,
             });
             edgesMaterial.resolution.set(
-              Math.max(1, viewerEl.clientWidth),
-              Math.max(1, viewerEl.clientHeight),
+              Math.max(1, renderPanelEl.clientWidth),
+              Math.max(1, renderPanelEl.clientHeight),
             );
             const edgeLines = new LineSegments2(lineGeometry, edgesMaterial);
             edgeLines.name = "__stepHighlight";
@@ -1212,8 +1303,8 @@
           )
             return null;
           if (projected.z < -1 || projected.z > 1) return null;
-          const width = viewerEl.clientWidth;
-          const height = viewerEl.clientHeight;
+          const width = renderPanelEl.clientWidth;
+          const height = renderPanelEl.clientHeight;
           if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
           if (width <= 0 || height <= 0) return null;
           const x = (projected.x * 0.5 + 0.5) * width;
@@ -1315,8 +1406,8 @@ ${line2}`,
             hideLeaderLabel();
             return;
           }
-          const width = viewerEl.clientWidth;
-          const height = viewerEl.clientHeight;
+          const width = renderPanelEl.clientWidth;
+          const height = renderPanelEl.clientHeight;
           labelBoxEl.textContent = target.text;
           labelBoxEl.style.display = "block";
           labelLineEl.style.display = "block";
@@ -1996,11 +2087,7 @@ ${line2}`,
           settingsToggleEl.classList.toggle("active", isOpen);
         });
         window.addEventListener("resize", () => {
-          camera.aspect = viewerEl.clientWidth / viewerEl.clientHeight;
-          camera.updateProjectionMatrix();
-          renderer.setSize(viewerEl.clientWidth, viewerEl.clientHeight);
-          updateHighlightMaterialResolution();
-          refreshLeaderLabel();
+          resizeRendererToRenderPanel();
         });
         function animate() {
           requestAnimationFrame(animate);
