@@ -272,6 +272,25 @@
         border: 0;
         background: #ffffff;
       }
+      #pdfMobileFallback {
+        display: none;
+        height: 100%;
+        padding: 16px;
+        color: #111827;
+        background: #ffffff;
+      }
+      #pdfMobileFallback p {
+        margin: 0 0 12px;
+        font-size: 0.92rem;
+        line-height: 1.4;
+      }
+      #pdfMobileFallback .file-button {
+        display: inline-block;
+        text-decoration: none;
+      }
+      #pdfMobileFallback[aria-hidden="false"] {
+        display: block;
+      }
       #openPdfButton.hidden {
         display: none;
       }
@@ -499,6 +518,20 @@
             <span id="buildStepLabel">Build Plan: Overview</span>
           </div>
           <aside id="pdfPanel">
+            <div id="pdfMobileFallback" aria-hidden="true">
+              <p>
+                On iPad/iPhone, inline PDF preview is limited. Open the PDF in
+                the full viewer to browse all pages.
+              </p>
+              <a
+                id="pdfOpenExternalLink"
+                class="file-button"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Open PDF in full viewer</a
+              >
+            </div>
             <iframe id="pdfFrame" title="PDF plans viewer"></iframe>
           </aside>
         </div>
@@ -551,6 +584,10 @@
         var openProjectButtonEl = document.getElementById("openProjectButton");
         var pdfPanelEl = document.getElementById("pdfPanel");
         var pdfFrameEl = document.getElementById("pdfFrame");
+        var pdfMobileFallbackEl = document.getElementById("pdfMobileFallback");
+        var pdfOpenExternalLinkEl = document.getElementById(
+          "pdfOpenExternalLink",
+        );
         var statusEl = document.getElementById("status");
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
@@ -750,8 +787,25 @@
             currentPdfObjectUrl = null;
           }
           currentPdfObjectUrl = URL.createObjectURL(file);
-          if (pdfFrameEl) {
-            pdfFrameEl.src = currentPdfObjectUrl;
+          if (isAppleMobile) {
+            if (pdfOpenExternalLinkEl) {
+              pdfOpenExternalLinkEl.href = currentPdfObjectUrl;
+            }
+            if (pdfMobileFallbackEl) {
+              pdfMobileFallbackEl.setAttribute("aria-hidden", "false");
+            }
+            if (pdfFrameEl) {
+              pdfFrameEl.src = "about:blank";
+              pdfFrameEl.style.display = "none";
+            }
+          } else {
+            if (pdfMobileFallbackEl) {
+              pdfMobileFallbackEl.setAttribute("aria-hidden", "true");
+            }
+            if (pdfFrameEl) {
+              pdfFrameEl.style.display = "block";
+              pdfFrameEl.src = currentPdfObjectUrl;
+            }
           }
           setPdfPanelOpen(true);
           setStatus(`Loaded PDF plans: ${file.name}`);
