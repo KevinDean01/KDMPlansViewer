@@ -111,6 +111,10 @@
         background: var(--color-control-active-bg);
         color: var(--color-control-active-text);
       }
+      .toolbar-button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
       #modelInput {
         display: none;
       }
@@ -577,7 +581,7 @@
       .file-button:hover {
         background: #2563eb;
       }
-      .toolbar-button:hover,
+      .toolbar-button:hover:not(:disabled),
       .build-controls button:hover:not(:disabled) {
         background: rgba(255, 255, 255, 0.12);
         border-color: rgba(255, 255, 255, 0.16);
@@ -631,13 +635,26 @@
         padding: 0 10px 10px;
         border-right: 1px solid var(--color-toolbar-border);
       }
-      #partsPanel h2 {
+      .parts-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
         margin: 0 -10px 10px;
         padding: 12px 14px;
         border-bottom: 1px solid var(--color-toolbar-border);
+      }
+      #partsPanel h2 {
+        margin: 0;
+        padding: 0;
+        border: 0;
         font-size: 11px;
         letter-spacing: 0.06em;
         text-transform: uppercase;
+      }
+      #unhideAll {
+        white-space: nowrap;
       }
       #partsList {
         gap: 3px;
@@ -751,6 +768,9 @@
         >Open PDF Plans</label
       >
       <input id="pdfInput" type="file" accept="application/pdf,.pdf" />
+      <button id="pdfToggle" class="toolbar-button" type="button" aria-controls="pdfPanel" aria-expanded="false" disabled>
+        Show PDF
+      </button>
       <button id="settingsToggle" class="toolbar-button" type="button" aria-controls="settingsPanel" aria-expanded="false">
         Settings
       </button>
@@ -824,7 +844,12 @@
         </div>
       </div>
       <aside id="partsPanel">
-        <h2>Components</h2>
+        <div class="parts-panel-header">
+          <h2>Components</h2>
+          <button id="unhideAll" class="toolbar-button" type="button" disabled>
+            Unhide all
+          </button>
+        </div>
         <ul id="partsList"></ul>
       </aside>
     </main>
@@ -880,6 +905,7 @@
         var renderPanelEl = document.getElementById("renderPanel");
         var inputEl = document.getElementById("modelInput");
         var pdfInputEl = document.getElementById("pdfInput");
+        var pdfToggleEl = document.getElementById("pdfToggle");
         var openProjectButtonEl = document.getElementById("openProjectButton");
         var pdfPanelEl = document.getElementById("pdfPanel");
         var pdfFrameEl = document.getElementById("pdfFrame");
@@ -893,6 +919,7 @@
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
         var partsListEl = document.getElementById("partsList");
+        var unhideAllEl = document.getElementById("unhideAll");
         var partsPanelTitleEl = document.querySelector("#partsPanel h2");
         var buildResetEl = document.getElementById("buildReset");
         var buildPrevEl = document.getElementById("buildPrev");
@@ -1087,7 +1114,18 @@
           if (!viewerSplitEl) return;
           viewerSplitEl.classList.toggle("pdf-open", !!isOpen);
           if (pdfPanelEl) pdfPanelEl.style.display = isOpen ? "block" : "none";
+          pdfToggleEl.textContent = isOpen ? "Hide PDF" : "Show PDF";
+          pdfToggleEl.setAttribute("aria-expanded", String(isOpen));
+          pdfToggleEl.classList.toggle("active", isOpen);
           requestAnimationFrame(resizeRendererToRenderPanel);
+          if (isOpen && isAppleMobile && activePdfDocument) {
+            requestAnimationFrame(() => {
+              renderPdfPage(activePdfPageNumber).catch((pdfError) => {
+                console.error("Failed to render PDF page", pdfError);
+                setStatus("Could not render PDF page.");
+              });
+            });
+          }
         }
         function updatePdfMobilePageUi() {
           const pageCount = activePdfDocument ? activePdfDocument.numPages : 0;
@@ -1203,6 +1241,7 @@
               pdfFrameEl.src = currentPdfObjectUrl;
             }
           }
+          pdfToggleEl.disabled = false;
           setPdfPanelOpen(true);
           setStatus(`Loaded PDF plans: ${file.name}`);
         }
@@ -1663,6 +1702,7 @@
           partMeshes = [];
           partEntries = [];
           allModelEntries = [];
+          unhideAllEl.disabled = true;
           partEntryByMesh.clear();
           buildPlanSteps = [];
           buildPlanStepIndex = -1;
@@ -2391,6 +2431,15 @@ ${line2}`,
           refreshLeaderLabel();
           updateBuildPlanControls();
         }
+        function updateVisibilityButton(entry) {
+          const action = entry.manuallyVisible ? "Hide" : "Show";
+          entry.visibilityButton.setAttribute(
+            "aria-label",
+            `${action} ${entry.memberName || entry.displayName}`,
+          );
+          entry.visibilityButton.dataset.visible = String(entry.manuallyVisible);
+          entry.visibilityButton.title = `${action} component`;
+        }
         function buildPartsList(modelRoot) {
           clearPartsList();
           let meshCount = 0;
@@ -2491,20 +2540,15 @@ ${line2}`,
             visibilityButton.className = "part-visibility";
             visibilityButton.innerHTML =
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M4 4l16 16"/></svg>';
-            const updateVisibilityButton = () => {
-              const action = entry.manuallyVisible ? "Hide" : "Show";
-              visibilityButton.setAttribute(
-                "aria-label",
-                `${action} ${entry.memberName || entry.displayName}`,
-              );
-              visibilityButton.dataset.visible = String(entry.manuallyVisible);
-              visibilityButton.title = `${action} component`;
-            };
-            updateVisibilityButton();
+            entry.visibilityButton = visibilityButton;
+            updateVisibilityButton(entry);
             visibilityButton.addEventListener("click", (event) => {
               event.stopPropagation();
               entry.manuallyVisible = !entry.manuallyVisible;
-              updateVisibilityButton();
+              updateVisibilityButton(entry);
+              unhideAllEl.disabled = !partEntries.some(
+                (part) => !part.manuallyVisible,
+              );
               applyBuildPlanStep();
             });
             row.appendChild(visibilityButton);
@@ -2588,9 +2632,20 @@ ${line2}`,
             console.error("Model read error:", error2);
           }
         });
+        pdfToggleEl.addEventListener("click", () => {
+          setPdfPanelOpen(!viewerSplitEl.classList.contains("pdf-open"));
+        });
         lightIntensityEl.addEventListener("input", applyLightingControls);
         shadowOpacityEl.addEventListener("input", applyLightingControls);
         shadowSoftnessEl.addEventListener("input", applyLightingControls);
+        unhideAllEl.addEventListener("click", () => {
+          partEntries.forEach((entry) => {
+            entry.manuallyVisible = true;
+            updateVisibilityButton(entry);
+          });
+          unhideAllEl.disabled = true;
+          applyBuildPlanStep();
+        });
         buildResetEl.addEventListener("click", () => {
           buildPlanStepIndex = -1;
           applyBuildPlanStep();
