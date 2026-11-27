@@ -209,10 +209,19 @@
         color: var(--color-control-active-text);
       }
       #buildStepLabel {
-        margin-left: 4px;
-        max-width: 430px;
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 25;
+        max-width: min(70%, 460px);
+        padding: 6px 10px;
+        border: 1px solid var(--color-viewer-label-border);
+        border-radius: var(--btnbordrad);
+        background: var(--color-viewer-label-bg);
+        pointer-events: none;
         font-size: 0.78rem;
-        color: var(--color-step-label-text);
+        color: var(--color-viewer-label-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -473,7 +482,6 @@
         <button id="buildReset" type="button">Overview</button>
         <button id="buildModeToggle" type="button">Build It: ON</button>
         <button id="labelToggle" type="button">Labels: ON</button>
-        <span id="buildStepLabel">Build Plan: Overview</span>
       </div>
       <span id="status">Ready: Open a kdm model file</span>
     </header>
@@ -488,6 +496,7 @@
             <button id="buildNext" class="viewer-nav-button right" type="button">
               Next Step
             </button>
+            <span id="buildStepLabel">Build Plan: Overview</span>
           </div>
           <aside id="pdfPanel">
             <iframe id="pdfFrame" title="PDF plans viewer"></iframe>
@@ -1415,7 +1424,7 @@ ${line2}`,
           const labelHeight = labelBoxEl.offsetHeight;
           const margin = 10;
           const labelX = Math.max(margin, (width - labelWidth) * 0.5);
-          const labelY = margin;
+          const labelY = Math.max(margin, height - labelHeight - margin);
           if (
             !Number.isFinite(anchorScreen.x) ||
             !Number.isFinite(anchorScreen.y) ||
@@ -1435,7 +1444,7 @@ ${line2}`,
             "x2",
             (labelX + labelWidth * 0.5).toFixed(2),
           );
-          labelLineEl.setAttribute("y2", (labelY + labelHeight).toFixed(2));
+          labelLineEl.setAttribute("y2", labelY.toFixed(2));
         }
         function applyStepHighlights(stepEntries, selectedMesh = null) {
           clearStepHighlights();
