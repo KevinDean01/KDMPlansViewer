@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studio3D — Modern WebGL Viewer</title>
+    <style>
+      /* ==========================================================================
+      Modern 3D Viewer App Stylesheet
+      Theme: Studio Dark / Glassmorphic HUD
+      ========================================================================== */
+
+      :root {
+        --bg-canvas: #0b0d10;
+        --bg-surface: rgba(20, 23, 29, 0.72);
+        --bg-surface-hover: rgba(32, 37, 46, 0.85);
+        --bg-surface-solid: #14171d;
+        --bg-input: rgba(11, 13, 16, 0.65);
+
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.16);
+        --border-accent: rgba(59, 130, 246, 0.5);
+
+        --text-primary: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --text-muted: #6b7280;
+
+        --accent-primary: #3b82f6;
+        --accent-primary-hover: #2563eb;
+        --accent-glow: rgba(59, 130, 246, 0.35);
+
+        --axis-x: #ef4444;
+        --axis-y: #10b981;
+        --axis-z: #3b82f6;
+
+        --glass-blur: blur(16px) saturate(180%);
+        --shadow-panel:
+          0 12px 32px -4px rgba(0, 0, 0, 0.55),
+          0 4px 12px -2px rgba(0, 0, 0, 0.35);
+        --shadow-floating: 0 20px 40px -8px rgba(0, 0, 0, 0.7);
+
+        --topbar-height: 52px;
+        --sidebar-width: 270px;
+        --inspector-width: 290px;
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 14px;
+        --radius-pill: 9999px;
+
+        --font-sans:
+          "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        --font-mono:
+          "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+
+        --transition-fast: 140ms cubic-bezier(0.2, 0, 0, 1);
+        --transition-smooth: 260ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: var(--bg-canvas);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        line-height: 1.4;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+
+      .viewer-app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .viewport-container {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: radial-gradient(
+          circle at 50% 45%,
+          #1a1f29 0%,
+          #0b0d10 100%
+        );
+        cursor: grab;
+      }
+
+      .viewport-container:active {
+        cursor: grabbing;
+      }
+
+      .viewport-container canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+      }
+
+      .viewport-vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+        background: radial-gradient(
+          circle at center,
+          transparent 60%,
+          rgba(0, 0, 0, 0.45) 100%
+        );
+      }
+
+      .hud-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 12px;
+      }
+
+      .glass-panel {
+        pointer-events: auto;
+        background: var(--bg-surface);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-panel);
+        transition: border-color var(--transition-fast);
+      }
+
+      .glass-panel:hover {
+        border-color: var(--border-strong);
+      }
+
+      /* Top Bar */
+      .topbar {
+        height: var(--topbar-height);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px;
+        gap: 16px;
+      }
+
+      .topbar-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: -0.01em;
+      }
+
+      .brand-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(135deg, var(--accent-primary), #8b5cf6);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 12px;
+        box-shadow: 0 0 14px var(--accent-glow);
+      }
+
+      .file-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .file-title .badge-ext {
+        color: var(--accent-primary);
+        font-weight: 600;
+      }
+
+      /* Middle Workspace */
+      .workspace-middle {
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 12px;
+        margin: 12px 0;
+        min-height: 0;
+      }
+
+      .sidebar-left {
+        width: var(--sidebar-width);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .sidebar-right {
+        width: var(--inspector-width);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-secondary);
+      }
+
+      .panel-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+      }
+
+      .panel-scroll::-webkit-scrollbar {
+        width: 5px;
+      }
+      .panel-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: var(--radius-pill);
+      }
+
+      /* Outliner Tree */
+      .scene-tree {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .tree-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 8px;
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition:
+          background var(--transition-fast),
+          color var(--transition-fast);
+      }
+
+      .tree-item:hover {
+        background: var(--bg-surface-hover);
+        color: var(--text-primary);
+      }
+
+      .tree-item.is-selected {
+        background: rgba(59, 130, 246, 0.18);
+        color: #ffffff;
+        border-color: rgba(59, 130, 246, 0.35);
+      }
+
+      .tree-item-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .vis-toggle {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 11px;
+        padding: 2px 4px;
+        border-radius: 4px;
+      }
+
+      .vis-toggle:hover {
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      /* Inspector Controls */
+      .inspector-section {
+        padding: 10px 4px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .inspector-section:last-child {
+        border-bottom: none;
+      }
+
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .control-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .control-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        min-width: 68px;
+      }
+
+      .vec3-group {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+        flex: 1;
+      }
+
+      .axis-input {
+        display: flex;
+        align-items: center;
+        background: var(--bg-input);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+
+      .axis-input:focus-within {
+        border-color: var(--accent-primary);
+      }
+
+      .axis-tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 4px;
+      }
+
+      .axis-tag.x {
+        background: rgba(239, 68, 68, 0.25);
+        color: var(--axis-x);
+      }
+      .axis-tag.y {
+        background: rgba(16, 185, 129, 0.25);
+        color: var(--axis-y);
+      }
+      .axis-tag.z {
+        background: rgba(59, 130, 246, 0.25);
+        color: var(--axis-z);
+      }
+
+      .axis-input input {
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 4px 4px;
+        outline: none;
+      }
+
+      .slider-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+
+      input[type="range"].studio-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: var(--radius-pill);
+        outline: none;
+        cursor: pointer;
+      }
+
+      input[type="range"].studio-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--text-primary);
+        border: 2px solid var(--accent-primary);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      }
+
+      input[type="color"].studio-color {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 26px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        padding: 2px;
+      }
+
+      .slider-value {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-secondary);
+        min-width: 34px;
+        text-align: right;
+      }
+
+      /* Buttons & Segmented Controls */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 6px 12px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+      }
+
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: var(--border-strong);
+      }
+
+      .btn-primary {
+        background: var(--accent-primary);
+        border-color: transparent;
+        color: #ffffff;
+        box-shadow: 0 4px 14px var(--accent-glow);
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-primary-hover);
+      }
+
+      .segmented-control {
+        display: inline-flex;
+        padding: 3px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        gap: 2px;
+      }
+
+      .segmented-btn {
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+      }
+
+      .segmented-btn:hover {
+        color: var(--text-primary);
+      }
+
+      .segmented-btn.is-active {
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Bottom Dock & Telemetry */
+      .bottom-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        pointer-events: none;
+      }
+
+      .floating-dock {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: var(--radius-pill);
+        box-shadow: var(--shadow-floating);
+      }
+
+      .dock-divider {
+        width: 1px;
+        height: 20px;
+        background: var(--border-subtle);
+        margin: 0 4px;
+      }
+
+      .viewport-telemetry {
+        pointer-events: auto;
+        padding: 6px 12px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-secondary);
+        display: flex;
+        gap: 12px;
+      }
+
+      .telemetry-stat span {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      /* Drag & Drop Zone */
+      .dropzone-overlay {
+        position: absolute;
+        inset: 16px;
+        z-index: 50;
+        border: 2px dashed var(--accent-primary);
+        border-radius: var(--radius-lg);
+        background: rgba(11, 13, 16, 0.85);
+        backdrop-filter: blur(12px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--transition-smooth);
+      }
+
+      .dropzone-overlay.is-dragging {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .dropzone-title {
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .dropzone-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+      }
+
+      @media (max-width: 900px) {
+        .sidebar-left,
+        .sidebar-right {
+          display: none;
+        }
+      }
+    </style>
+
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="viewer-app" id="app-root">
+      <!-- Full-Bleed WebGL Canvas -->
+      <div class="viewport-container" id="viewport">
+        <div class="viewport-vignette"></div>
+      </div>
+
+      <!-- Floating Glassmorphic HUD -->
+      <div class="hud-layer">
+        <!-- Top Bar -->
+        <header class="topbar glass-panel">
+          <div class="topbar-group">
+            <div class="brand-badge">
+              <div class="brand-icon">3D</div>
+              <span>Studio3D</span>
+            </div>
+            <div class="file-title">
+              <span id="active-filename">turbine_core_assembly</span>
+              <span class="badge-ext" id="active-ext">.GLB</span>
+            </div>
+          </div>
+
+          <div class="segmented-control" id="shading-modes">
+            <button class="segmented-btn is-active" data-mode="solid">
+              Solid
+            </button>
+            <button class="segmented-btn" data-mode="wireframe">
+              Wireframe
+            </button>
+            <button class="segmented-btn" data-mode="matcap">MatCap</button>
+            <button class="segmented-btn" data-mode="uv">UV Grid</button>
+          </div>
+
+          <div class="topbar-group">
+            <input
+              type="file"
+              id="file-input"
+              accept=".glb,.gltf,.obj"
+              hidden
+            />
+            <button class="btn btn-primary" id="btn-import">
+              Import 3D Model
+            </button>
+          </div>
+        </header>
+
+        <!-- Left Outliner + Right Inspector -->
+        <div class="workspace-middle">
+          <aside class="sidebar-left glass-panel">
+            <div class="panel-header">
+              <span>Scene Outliner</span>
+              <span id="mesh-count">4 objects</span>
+            </div>
+            <div class="panel-scroll">
+              <ul class="scene-tree" id="scene-tree"></ul>
+            </div>
+          </aside>
+
+          <aside class="sidebar-right glass-panel">
+            <div class="panel-header">
+              <span>Inspector</span>
+              <span id="selected-name" style="color: var(--accent-primary)"
+                >Core_Rotor</span
+              >
+            </div>
+            <div class="panel-scroll">
+              <!-- Transform -->
+              <div class="inspector-section">
+                <div class="section-title">TRANSFORM</div>
+                <div class="control-row">
+                  <span class="control-label">Position</span>
+                  <div class="vec3-group">
+                    <div class="axis-input">
+                      <span class="axis-tag x">X</span
+                      ><input type="number" step="0.1" id="pos-x" value="0" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag y">Y</span
+                      ><input type="number" step="0.1" id="pos-y" value="0" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag z">Z</span
+                      ><input type="number" step="0.1" id="pos-z" value="0" />
+                    </div>
+                  </div>
+                </div>
+                <div class="control-row">
+                  <span class="control-label">Rotation</span>
+                  <div class="vec3-group">
+                    <div class="axis-input">
+                      <span class="axis-tag x">X</span
+                      ><input type="number" step="5" id="rot-x" value="0" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag y">Y</span
+                      ><input type="number" step="5" id="rot-y" value="0" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag z">Z</span
+                      ><input type="number" step="5" id="rot-z" value="0" />
+                    </div>
+                  </div>
+                </div>
+                <div class="control-row">
+                  <span class="control-label">Scale</span>
+                  <div class="vec3-group">
+                    <div class="axis-input">
+                      <span class="axis-tag x">X</span
+                      ><input type="number" step="0.1" id="scl-x" value="1" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag y">Y</span
+                      ><input type="number" step="0.1" id="scl-y" value="1" />
+                    </div>
+                    <div class="axis-input">
+                      <span class="axis-tag z">Z</span
+                      ><input type="number" step="0.1" id="scl-z" value="1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PBR Material -->
+              <div class="inspector-section">
+                <div class="section-title">PBR MATERIAL</div>
+                <div class="control-row">
+                  <span class="control-label">Base Tint</span>
+                  <div style="flex: 1">
+                    <input
+                      type="color"
+                      class="studio-color"
+                      id="mat-color"
+                      value="#3b82f6"
+                    />
+                  </div>
+                </div>
+                <div class="control-row">
+                  <span class="control-label">Metalness</span>
+                  <div class="slider-control">
+                    <input
+                      type="range"
+                      class="studio-slider"
+                      id="mat-metal"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value="0.75"
+                    />
+                    <span class="slider-value" id="val-metal">0.75</span>
+                  </div>
+                </div>
+                <div class="control-row">
+                  <span class="control-label">Roughness</span>
+                  <div class="slider-control">
+                    <input
+                      type="range"
+                      class="studio-slider"
+                      id="mat-rough"
+                      min="0.05"
+                      max="1"
+                      step="0.01"
+                      value="0.25"
+                    />
+                    <span class="slider-value" id="val-rough">0.25</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Environment -->
+              <div class="inspector-section">
+                <div class="section-title">STUDIO LIGHTING</div>
+                <div class="control-row">
+                  <span class="control-label">Exposure</span>
+                  <div class="slider-control">
+                    <input
+                      type="range"
+                      class="studio-slider"
+                      id="env-exposure"
+                      min="0.3"
+                      max="2.5"
+                      step="0.05"
+                      value="1.15"
+                    />
+                    <span class="slider-value" id="val-exposure">1.15</span>
+                  </div>
+                </div>
+                <div class="control-row">
+                  <span class="control-label">Turntable</span>
+                  <button class="btn" id="btn-spin" style="flex: 1">
+                    Auto-Rotate: ON
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Bottom Floating Dock -->
+        <div class="bottom-bar">
+          <div class="viewport-telemetry glass-panel">
+            <div class="telemetry-stat">FPS <span id="stat-fps">60</span></div>
+            <div class="telemetry-stat">TRIS <span id="stat-tris">0</span></div>
+          </div>
+
+          <div class="floating-dock glass-panel">
+            <button class="btn" data-cam="iso">ISO</button>
+            <button class="btn" data-cam="front">Front</button>
+            <button class="btn" data-cam="side">Side</button>
+            <button class="btn" data-cam="top">Top</button>
+            <div class="dock-divider"></div>
+            <button class="btn" id="btn-grid">Grid: ON</button>
+            <button class="btn" id="btn-reset">Reset View</button>
+          </div>
+
+          <div class="viewport-telemetry glass-panel">
+            <div class="telemetry-stat">LMB <span>Orbit</span></div>
+            <div class="telemetry-stat">RMB <span>Pan</span></div>
+            <div class="telemetry-stat">Scroll <span>Zoom</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag & Drop Overlay -->
+      <div class="dropzone-overlay" id="dropzone">
+        <div class="dropzone-title">Drop 3D Model to Inspect</div>
+        <div class="dropzone-subtitle">
+          Supports .GLB, .GLTF, and .OBJ files
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+      import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+
+      // --- Renderer & Scene Setup ---
+      const container = document.getElementById("viewport");
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200,
+      );
+      camera.position.set(4.5, 3.2, 5.2);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.target.set(0, 0.8, 0);
+
+      // Studio Grid & Lights
+      const gridHelper = new THREE.GridHelper(16, 32, 0x3b82f6, 0x1f2530);
+      gridHelper.material.opacity = 0.35;
+      gridHelper.material.transparent = true;
+      scene.add(gridHelper);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 2.2);
+      dirLight.position.set(5, 8, 5);
+      dirLight.castShadow = true;
+      scene.add(dirLight);
+
+      const rimLight = new THREE.DirectionalLight(0x3b82f6, 1.4);
+      rimLight.position.set(-5, 3, -5);
+      scene.add(rimLight);
+
+      // --- Procedural Default 3D Assembly ---
+      const modelGroup = new THREE.Group();
+      scene.add(modelGroup);
+
+      let selectableMeshes = [];
+      let selectedMesh = null;
+      let autoRotate = true;
+      let currentShading = "solid";
+
+      function buildDefaultAssembly() {
+        clearModelGroup();
+
+        const coreMat = new THREE.MeshStandardMaterial({
+          color: 0x3b82f6,
+          metalness: 0.78,
+          roughness: 0.22,
+        });
+        const darkMetal = new THREE.MeshStandardMaterial({
+          color: 0x1f2937,
+          metalness: 0.88,
+          roughness: 0.32,
+        });
+        const chromeMat = new THREE.MeshStandardMaterial({
+          color: 0xe5e7eb,
+          metalness: 0.95,
+          roughness: 0.12,
+        });
+        const glowMat = new THREE.MeshStandardMaterial({
+          color: 0x60a5fa,
+          emissive: 0x2563eb,
+          emissiveIntensity: 1.4,
+          metalness: 0.2,
+          roughness: 0.2,
+        });
+
+        const core = new THREE.Mesh(
+          new THREE.TorusKnotGeometry(0.75, 0.22, 160, 24),
+          coreMat,
+        );
+        core.name = "Core_Rotor";
+        core.position.y = 1.25;
+
+        const outerRing = new THREE.Mesh(
+          new THREE.TorusGeometry(1.35, 0.07, 24, 96),
+          chromeMat,
+        );
+        outerRing.name = "Gimbal_Ring";
+        outerRing.position.y = 1.25;
+        outerRing.rotation.x = Math.PI / 3;
+
+        const base = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.5, 1.7, 0.24, 48),
+          darkMetal,
+        );
+        base.name = "Pedestal_Base";
+        base.position.y = 0.12;
+
+        const energyRing = new THREE.Mesh(
+          new THREE.TorusGeometry(1.42, 0.025, 16, 64),
+          glowMat,
+        );
+        energyRing.name = "Emitter_Halo";
+        energyRing.position.y = 0.25;
+        energyRing.rotation.x = Math.PI / 2;
+
+        [core, outerRing, base, energyRing].forEach((m) => {
+          m.castShadow = true;
+          m.receiveShadow = true;
+          m.userData.originalMaterial = m.material.clone();
+          modelGroup.add(m);
+          selectableMeshes.push(m);
+        });
+
+        updateOutliner();
+        selectObject(core);
+        updateTriangleCount();
+      }
+
+      function clearModelGroup() {
+        while (modelGroup.children.length > 0) {
+          modelGroup.remove(modelGroup.children[0]);
+        }
+        selectableMeshes = [];
+        selectedMesh = null;
+      }
+
+      // --- Outliner & Inspector Sync ---
+      const treeEl = document.getElementById("scene-tree");
+      const meshCountEl = document.getElementById("mesh-count");
+      const selectedNameEl = document.getElementById("selected-name");
+
+      function updateOutliner() {
+        treeEl.innerHTML = "";
+        meshCountEl.textContent = ` {selectableMeshes.length === 1 ? '' : 's'}`;
+
+        selectableMeshes.forEach((mesh, idx) => {
+          const li = document.createElement("li");
+          li.className =
+            "tree-item" + (mesh === selectedMesh ? " is-selected" : "");
+
+          const label = document.createElement("span");
+          label.className = "tree-item-label";
+          label.textContent = mesh.name || `Mesh_${idx + 1}`;
+
+          const visBtn = document.createElement("button");
+          visBtn.className = "vis-toggle";
+          visBtn.textContent = mesh.visible ? "👁" : "🚫";
+          visBtn.title = "Toggle Visibility";
+          visBtn.onclick = (e) => {
+            e.stopPropagation();
+            mesh.visible = !mesh.visible;
+            visBtn.textContent = mesh.visible ? "👁" : "🚫";
+          };
+
+          li.onclick = () => selectObject(mesh);
+          li.appendChild(label);
+          li.appendChild(visBtn);
+          treeEl.appendChild(li);
+        });
+      }
+
+      function selectObject(mesh) {
+        selectedMesh = mesh;
+        selectedNameEl.textContent = mesh ? mesh.name || "Mesh" : "None";
+        updateOutliner();
+        syncInspectorFromMesh();
+      }
+
+      const inputs = {
+        posX: document.getElementById("pos-x"),
+        posY: document.getElementById("pos-y"),
+        posZ: document.getElementById("pos-z"),
+        rotX: document.getElementById("rot-x"),
+        rotY: document.getElementById("rot-y"),
+        rotZ: document.getElementById("rot-z"),
+        sclX: document.getElementById("scl-x"),
+        sclY: document.getElementById("scl-y"),
+        sclZ: document.getElementById("scl-z"),
+        color: document.getElementById("mat-color"),
+        metal: document.getElementById("mat-metal"),
+        rough: document.getElementById("mat-rough"),
+        valMetal: document.getElementById("val-metal"),
+        valRough: document.getElementById("val-rough"),
+      };
+
+      function syncInspectorFromMesh() {
+        if (!selectedMesh) return;
+        inputs.posX.value = selectedMesh.position.x.toFixed(2);
+        inputs.posY.value = selectedMesh.position.y.toFixed(2);
+        inputs.posZ.value = selectedMesh.position.z.toFixed(2);
+
+        inputs.rotX.value = Math.round(
+          THREE.MathUtils.radToDeg(selectedMesh.rotation.x),
+        );
+        inputs.rotY.value = Math.round(
+          THREE.MathUtils.radToDeg(selectedMesh.rotation.y),
+        );
+        inputs.rotZ.value = Math.round(
+          THREE.MathUtils.radToDeg(selectedMesh.rotation.z),
+        );
+
+        inputs.sclX.value = selectedMesh.scale.x.toFixed(2);
+        inputs.sclY.value = selectedMesh.scale.y.toFixed(2);
+        inputs.sclZ.value = selectedMesh.scale.z.toFixed(2);
+
+        const mat =
+          selectedMesh.userData.originalMaterial || selectedMesh.material;
+        if (mat && mat.color) {
+          inputs.color.value = "#" + mat.color.getHexString();
+        }
+        if (mat && typeof mat.metalness === "number") {
+          inputs.metal.value = mat.metalness;
+          inputs.valMetal.textContent = mat.metalness.toFixed(2);
+        }
+        if (mat && typeof mat.roughness === "number") {
+          inputs.rough.value = mat.roughness;
+          inputs.valRough.textContent = mat.roughness.toFixed(2);
+        }
+      }
+
+      function bindInspectorInputs() {
+        ["posX", "posY", "posZ"].forEach((key, i) => {
+          const axis = ["x", "y", "z"][i];
+          inputs[key].addEventListener("input", () => {
+            if (selectedMesh)
+              selectedMesh.position[axis] = parseFloat(inputs[key].value) || 0;
+          });
+        });
+
+        ["rotX", "rotY", "rotZ"].forEach((key, i) => {
+          const axis = ["x", "y", "z"][i];
+          inputs[key].addEventListener("input", () => {
+            if (selectedMesh)
+              selectedMesh.rotation[axis] = THREE.MathUtils.degToRad(
+                parseFloat(inputs[key].value) || 0,
+              );
+          });
+        });
+
+        ["sclX", "sclY", "sclZ"].forEach((key, i) => {
+          const axis = ["x", "y", "z"][i];
+          inputs[key].addEventListener("input", () => {
+            if (selectedMesh)
+              selectedMesh.scale[axis] = Math.max(
+                0.01,
+                parseFloat(inputs[key].value) || 1,
+              );
+          });
+        });
+
+        inputs.color.addEventListener("input", () => {
+          if (!selectedMesh) return;
+          const orig = selectedMesh.userData.originalMaterial;
+          if (orig && orig.color) orig.color.set(inputs.color.value);
+          if (selectedMesh.material && selectedMesh.material.color)
+            selectedMesh.material.color.set(inputs.color.value);
+        });
+
+        inputs.metal.addEventListener("input", () => {
+          const val = parseFloat(inputs.metal.value);
+          inputs.valMetal.textContent = val.toFixed(2);
+          if (!selectedMesh) return;
+          if (selectedMesh.userData.originalMaterial)
+            selectedMesh.userData.originalMaterial.metalness = val;
+          if ("metalness" in selectedMesh.material)
+            selectedMesh.material.metalness = val;
+        });
+
+        inputs.rough.addEventListener("input", () => {
+          const val = parseFloat(inputs.rough.value);
+          inputs.valRough.textContent = val.toFixed(2);
+          if (!selectedMesh) return;
+          if (selectedMesh.userData.originalMaterial)
+            selectedMesh.userData.originalMaterial.roughness = val;
+          if ("roughness" in selectedMesh.material)
+            selectedMesh.material.roughness = val;
+        });
+      }
+
+      // --- Shading Modes ---
+      function createUVCheckerTexture() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        const size = 32;
+        for (let y = 0; y < 8; y++) {
+          for (let x = 0; x < 8; x++) {
+            ctx.fillStyle = (x + y) % 2 === 0 ? "#3b82f6" : "#111827";
+            ctx.fillRect(x * size, y * size, size, size);
+          }
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+      }
+
+      const uvTexture = createUVCheckerTexture();
+
+      function applyShadingMode(mode) {
+        currentShading = mode;
+        selectableMeshes.forEach((mesh) => {
+          const baseMat = mesh.userData.originalMaterial;
+          if (mode === "solid") {
+            mesh.material = baseMat;
+            mesh.material.wireframe = false;
+          } else if (mode === "wireframe") {
+            mesh.material = new THREE.MeshBasicMaterial({
+              color: 0x3b82f6,
+              wireframe: true,
+            });
+          } else if (mode === "matcap") {
+            mesh.material = new THREE.MeshNormalMaterial();
+          } else if (mode === "uv") {
+            mesh.material = new THREE.MeshStandardMaterial({
+              map: uvTexture,
+              roughness: 0.5,
+            });
+          }
+        });
+      }
+
+      document
+        .querySelectorAll("#shading-modes .segmented-btn")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document
+              .querySelectorAll("#shading-modes .segmented-btn")
+              .forEach((b) => b.classList.remove("is-active"));
+            btn.classList.add("is-active");
+            applyShadingMode(btn.dataset.mode);
+          });
+        });
+
+      // --- Raycasting Click Selection ---
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      let downPos = { x: 0, y: 0 };
+
+      renderer.domElement.addEventListener("pointerdown", (e) => {
+        downPos = { x: e.clientX, y: e.clientY };
+      });
+
+      renderer.domElement.addEventListener("pointerup", (e) => {
+        const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+        if (dist > 4) return;
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(selectableMeshes, false);
+        if (hits.length > 0) selectObject(hits[0].object);
+      });
+
+      // --- Camera Presets & Bottom Controls ---
+      document.querySelectorAll("[data-cam]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const view = btn.dataset.cam;
+          controls.target.set(0, 1, 0);
+          if (view === "iso") camera.position.set(4.5, 3.2, 5.2);
+          if (view === "front") camera.position.set(0, 1.2, 6);
+          if (view === "side") camera.position.set(6, 1.2, 0);
+          if (view === "top") camera.position.set(0, 7, 0.01);
+          controls.update();
+        });
+      });
+
+      document.getElementById("btn-grid").addEventListener("click", (e) => {
+        gridHelper.visible = !gridHelper.visible;
+        e.target.textContent = `Grid: ${gridHelper.visible ? "ON" : "OFF"}`;
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        controls.target.set(0, 1, 0);
+        camera.position.set(4.5, 3.2, 5.2);
+        controls.update();
+      });
+
+      document.getElementById("btn-spin").addEventListener("click", (e) => {
+        autoRotate = !autoRotate;
+        e.target.textContent = `Auto-Rotate: ${autoRotate ? "ON" : "OFF"}`;
+      });
+
+      const expSlider = document.getElementById("env-exposure");
+      const expVal = document.getElementById("val-exposure");
+      expSlider.addEventListener("input", () => {
+        const v = parseFloat(expSlider.value);
+        renderer.toneMappingExposure = v;
+        expVal.textContent = v.toFixed(2);
+      });
+
+      // --- File Import (.GLB, .GLTF, .OBJ) ---
+      const fileInput = document.getElementById("file-input");
+      const dropzone = document.getElementById("dropzone");
+      document
+        .getElementById("btn-import")
+        .addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files[0]) loadModelFile(e.target.files[0]);
+      });
+
+      window.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.classList.add("is-dragging");
+      });
+
+      dropzone.addEventListener("dragleave", () =>
+        dropzone.classList.remove("is-dragging"),
+      );
+      dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("is-dragging");
+        if (e.dataTransfer.files[0]) loadModelFile(e.dataTransfer.files[0]);
+      });
+
+      function loadModelFile(file) {
+        const url = URL.createObjectURL(file);
+        const ext = file.name.split(".").pop().toLowerCase();
+        document.getElementById("active-filename").textContent =
+          file.name.replace(/\.[^/.]+$/, "");
+        document.getElementById("active-ext").textContent =
+          "." + ext.toUpperCase();
+
+        const onLoaded = (root) => {
+          clearModelGroup();
+          const box = new THREE.Box3().setFromObject(root);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z) || 1;
+          const scale = 2.6 / maxDim;
+
+          root.scale.multiplyScalar(scale);
+          root.position.sub(center.multiplyScalar(scale));
+          root.position.y += (size.y * scale) / 2;
+
+          root.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              if (!child.material)
+                child.material = new THREE.MeshStandardMaterial({
+                  color: 0xcccccc,
+                });
+              child.userData.originalMaterial = child.material;
+              selectableMeshes.push(child);
+            }
+          });
+
+          modelGroup.add(root);
+          applyShadingMode(currentShading);
+          updateOutliner();
+          if (selectableMeshes[0]) selectObject(selectableMeshes[0]);
+          updateTriangleCount();
+          URL.revokeObjectURL(url);
+        };
+
+        if (ext === "glb" || ext === "gltf") {
+          new GLTFLoader().load(url, (gltf) => onLoaded(gltf.scene));
+        } else if (ext === "obj") {
+          new OBJLoader().load(url, (obj) => onLoaded(obj));
+        }
+      }
+
+      function updateTriangleCount() {
+        let tris = 0;
+        selectableMeshes.forEach((m) => {
+          if (m.geometry) {
+            tris += m.geometry.index
+              ? m.geometry.index.count / 3
+              : m.geometry.attributes.position.count / 3;
+          }
+        });
+        document.getElementById("stat-tris").textContent =
+          Math.round(tris).toLocaleString();
+      }
+
+      // --- Resize & Animation Loop ---
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      let lastTime = performance.now();
+      let frames = 0;
+      const fpsEl = document.getElementById("stat-fps");
+
+      function animate(now) {
+        requestAnimationFrame(animate);
+        frames++;
+        if (now - lastTime >= 500) {
+          fpsEl.textContent = Math.round((frames * 1000) / (now - lastTime));
+          frames = 0;
+          lastTime = now;
+        }
+
+        if (autoRotate) {
+          modelGroup.rotation.y += 0.004;
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      bindInspectorInputs();
+      buildDefaultAssembly();
+      animate(performance.now());
+    </script>
+  </body>
+</html>
