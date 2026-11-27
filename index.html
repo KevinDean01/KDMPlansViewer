@@ -653,9 +653,47 @@
           if (imperialVotes > metricVotes) return "in";
           return "mm";
         }
+        function detectProjectDimensionUnitFromFileName(fileName) {
+          const text = String(fileName || "").toLowerCase();
+          if (!text) return null;
+          const nameTokens = text.split(/[^a-z0-9]+/).filter(Boolean);
+          if (nameTokens.includes("imp")) return "in";
+          if (nameTokens.includes("met")) return "mm";
+          return null;
+        }
+        function greatestCommonDivisor(a, b) {
+          let x = Math.abs(Math.trunc(a));
+          let y = Math.abs(Math.trunc(b));
+          while (y !== 0) {
+            const remainder = x % y;
+            x = y;
+            y = remainder;
+          }
+          return x || 1;
+        }
+        function formatInchesAsFraction(valueInches) {
+          if (!Number.isFinite(valueInches)) return "";
+          const sign = valueInches < 0 ? "-" : "";
+          const absoluteValue = Math.abs(valueInches);
+          let whole = Math.floor(absoluteValue);
+          const denominatorBase = 16;
+          let numerator = Math.round((absoluteValue - whole) * denominatorBase);
+          if (numerator === denominatorBase) {
+            whole += 1;
+            numerator = 0;
+          }
+          if (numerator === 0) return `${sign}${whole}"`;
+          const divisor = greatestCommonDivisor(numerator, denominatorBase);
+          const reducedNumerator = numerator / divisor;
+          const reducedDenominator = denominatorBase / divisor;
+          if (whole === 0)
+            return `${sign}${reducedNumerator}/${reducedDenominator}"`;
+          return `${sign}${whole} ${reducedNumerator}/${reducedDenominator}"`;
+        }
         function formatDimensionValue(value, unit) {
           if (!Number.isFinite(value)) return "";
-          const precision = unit === "in" ? 2 : 1;
+          if (unit === "in") return formatInchesAsFraction(value / 25.4);
+          const precision = 1;
           const rounded = Number(value.toFixed(precision));
           return Number.isInteger(rounded) ? String(rounded) : String(rounded);
         }
@@ -666,15 +704,23 @@
           if (parts.length >= 3 && parts[2].trim()) return parts[2].trim();
           return rawName;
         }
-        function getPanelLabel(extras, objectName, defaultUnit = "mm") {
+        function getPanelLabel(
+          extras,
+          objectName,
+          defaultUnit = "mm",
+          forceUnit = false,
+        ) {
           const width = readNumberField(extras, "(G) width");
           const depth = readNumberField(extras, "(H) depth");
           const length = readNumberField(extras, "(I) length");
           if (width !== null && depth !== null && length !== null) {
-            const unit = detectEntryDimensionUnit(extras) || defaultUnit;
+            const unit = forceUnit
+              ? defaultUnit
+              : detectEntryDimensionUnit(extras) || defaultUnit;
             const widthText = formatDimensionValue(width, unit);
             const depthText = formatDimensionValue(depth, unit);
             const lengthText = formatDimensionValue(length, unit);
+            if (unit === "in") return `${widthText}x${depthText}x${lengthText}`;
             return `${widthText}x${depthText}x${lengthText}${unit}`;
           }
           return getPanelLabelFromObjectName(objectName);
@@ -1009,6 +1055,7 @@
           return await new Response(decompressedStream).arrayBuffer();
         }
         function loadModelFromArrayBuffer(arrayBuffer, label) {
+          loadedModelFileName = String(label || "").trim();
           setStatus(`Loading: ${label}`);
           loader.parse(
             arrayBuffer,
@@ -1939,6 +1986,7 @@ ${line2}`,
           let meshCount = 0;
           const fixingNamePattern = /(nail|screw|bolt|washer|fixing)/i;
           let modelDimensionUnit = "mm";
+          let hasProjectUnitOverride = false;
           partEntries = [];
           allModelEntries = [];
           modelRoot.traverse((child) => {
@@ -1982,14 +2030,21 @@ ${line2}`,
             allModelEntries.push(entry);
             if (!isFixing) partEntries.push(entry);
           });
-          modelDimensionUnit = detectModelDimensionUnit(
-            partEntries.length > 0 ? partEntries : allModelEntries,
+          const projectUnit = detectProjectDimensionUnitFromFileName(
+            loadedModelFileName,
           );
+          hasProjectUnitOverride = projectUnit !== null;
+          modelDimensionUnit =
+            projectUnit ||
+            detectModelDimensionUnit(
+              partEntries.length > 0 ? partEntries : allModelEntries,
+            );
           allModelEntries.forEach((entry) => {
             entry.listName = getPanelLabel(
               entry.extras,
               entry.displayName,
               modelDimensionUnit,
+              hasProjectUnitOverride,
             );
           });
           partEntries.sort((a, b) => {
@@ -2049,6 +2104,7 @@ ${line2}`,
           shadowSoftnessValueEl.textContent = shadowSoftness.toFixed(0);
         }
         function loadModel(url, label = url) {
+          loadedModelFileName = String(label || "").trim();
           setStatus(`Loading: ${label}`);
           loader.load(
             url,
