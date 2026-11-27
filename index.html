@@ -272,24 +272,62 @@
         border: 0;
         background: #ffffff;
       }
-      #pdfMobileFallback {
+      #pdfMobileViewer {
         display: none;
         height: 100%;
-        padding: 16px;
-        color: #111827;
+        min-height: 0;
+        grid-template-rows: auto minmax(0, 1fr);
+        color: #0f172a;
         background: #ffffff;
       }
-      #pdfMobileFallback p {
-        margin: 0 0 12px;
-        font-size: 0.92rem;
-        line-height: 1.4;
+      #pdfMobileViewer[aria-hidden="false"] {
+        display: grid;
       }
-      #pdfMobileFallback .file-button {
-        display: inline-block;
-        text-decoration: none;
+      #pdfMobileToolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+        border-bottom: 1px solid #d0d7e7;
       }
-      #pdfMobileFallback[aria-hidden="false"] {
+      #pdfMobileToolbar button {
+        border: 1px solid #3b4e80;
+        border-radius: var(--btnbordrad);
+        background: #223253;
+        color: #dbe4ff;
+        font-size: 0.78rem;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      #pdfMobileToolbar button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      #pdfMobilePageLabel {
+        margin-left: auto;
+        font-size: 0.82rem;
+        color: #1f2a44;
+      }
+      #pdfMobileCanvasWrap {
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 10px;
+        background: #f8fafc;
+      }
+      #pdfMobileCanvas {
         display: block;
+        width: 100%;
+        max-width: 100%;
+        margin: 0 auto;
+        background: #ffffff;
+        box-shadow: 0 2px 8px #0f172a26;
+      }
+      #pdfMobileHint {
+        margin: 8px 10px 10px;
+        font-size: 0.92rem;
+        line-height: 1.3;
+        color: #334155;
       }
       #openPdfButton.hidden {
         display: none;
@@ -518,19 +556,16 @@
             <span id="buildStepLabel">Build Plan: Overview</span>
           </div>
           <aside id="pdfPanel">
-            <div id="pdfMobileFallback" aria-hidden="true">
-              <p>
-                On iPad/iPhone, inline PDF preview is limited. Open the PDF in
-                the full viewer to browse all pages.
-              </p>
-              <a
-                id="pdfOpenExternalLink"
-                class="file-button"
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                >Open PDF in full viewer</a
-              >
+            <div id="pdfMobileViewer" aria-hidden="true">
+              <div id="pdfMobileToolbar">
+                <button id="pdfMobilePrev" type="button">Previous Page</button>
+                <button id="pdfMobileNext" type="button">Next Page</button>
+                <span id="pdfMobilePageLabel">Page 0 / 0</span>
+              </div>
+              <div id="pdfMobileCanvasWrap">
+                <canvas id="pdfMobileCanvas"></canvas>
+              </div>
+              <p id="pdfMobileHint">Swipe left/right on page to navigate.</p>
             </div>
             <iframe id="pdfFrame" title="PDF plans viewer"></iframe>
           </aside>
@@ -584,10 +619,12 @@
         var openProjectButtonEl = document.getElementById("openProjectButton");
         var pdfPanelEl = document.getElementById("pdfPanel");
         var pdfFrameEl = document.getElementById("pdfFrame");
-        var pdfMobileFallbackEl = document.getElementById("pdfMobileFallback");
-        var pdfOpenExternalLinkEl = document.getElementById(
-          "pdfOpenExternalLink",
-        );
+        var pdfMobileViewerEl = document.getElementById("pdfMobileViewer");
+        var pdfMobilePrevEl = document.getElementById("pdfMobilePrev");
+        var pdfMobileNextEl = document.getElementById("pdfMobileNext");
+        var pdfMobilePageLabelEl = document.getElementById("pdfMobilePageLabel");
+        var pdfMobileCanvasWrapEl = document.getElementById("pdfMobileCanvasWrap");
+        var pdfMobileCanvasEl = document.getElementById("pdfMobileCanvas");
         var statusEl = document.getElementById("status");
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
@@ -720,6 +757,14 @@
         var labelsEnabled = true;
         var stepHighlightOverlays = /* @__PURE__ */ new Map();
         var partEntryByMesh = /* @__PURE__ */ new Map();
+        var pdfJsLibPromise = null;
+        var activePdfDocument = null;
+        var activePdfLoadTask = null;
+        var activePdfRenderTask = null;
+        var activePdfPageNumber = 1;
+        var activePdfRenderToken = 0;
+        var pdfTouchStartX = 0;
+        var pdfTouchStartY = 0;
         var partsPanelDefaultTitle = partsPanelTitleEl
           ? partsPanelTitleEl.textContent
           : "Components";
@@ -780,6 +825,96 @@
           if (pdfPanelEl) pdfPanelEl.style.display = isOpen ? "block" : "none";
           requestAnimationFrame(resizeRendererToRenderPanel);
         }
+        function updatePdfMobilePageUi() {
+          const pageCount = activePdfDocument ? activePdfDocument.numPages : 0;
+          if (pdfMobilePageLabelEl) {
+            pdfMobilePageLabelEl.textContent = `Page ${pageCount ? activePdfPageNumber : 0} / ${pageCount}`;
+          }
+          if (pdfMobilePrevEl) {
+            pdfMobilePrevEl.disabled = !pageCount || activePdfPageNumber <= 1;
+          }
+          if (pdfMobileNextEl) {
+            pdfMobileNextEl.disabled =
+              !pageCount || activePdfPageNumber >= pageCount;
+          }
+        }
+        async function ensurePdfJsLoaded() {
+          if (!pdfJsLibPromise) {
+            pdfJsLibPromise = import("./vendor/pdfjs/pdf.mjs").then((pdfjsLib) => {
+              pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "./vendor/pdfjs/pdf.worker.min.mjs";
+              return pdfjsLib;
+            });
+          }
+          return await pdfJsLibPromise;
+        }
+        async function renderPdfPage(pageNumber) {
+          if (!activePdfDocument || !pdfMobileCanvasEl || !pdfMobileCanvasWrapEl)
+            return;
+          activePdfPageNumber = Math.max(
+            1,
+            Math.min(pageNumber, activePdfDocument.numPages),
+          );
+          const localRenderToken = ++activePdfRenderToken;
+          if (activePdfRenderTask && typeof activePdfRenderTask.cancel === "function") {
+            activePdfRenderTask.cancel();
+            try {
+              await activePdfRenderTask.promise;
+            } catch (renderCancelError) {}
+          }
+          const page = await activePdfDocument.getPage(activePdfPageNumber);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const availableWidth = Math.max(
+            200,
+            pdfMobileCanvasWrapEl.clientWidth - 20,
+          );
+          const scale = availableWidth / Math.max(1, baseViewport.width);
+          const viewport = page.getViewport({ scale });
+          const pixelRatio = window.devicePixelRatio || 1;
+          const renderContext = pdfMobileCanvasEl.getContext("2d", {
+            alpha: false,
+          });
+          if (!renderContext) return;
+          pdfMobileCanvasEl.width = Math.max(1, Math.floor(viewport.width * pixelRatio));
+          pdfMobileCanvasEl.height = Math.max(
+            1,
+            Math.floor(viewport.height * pixelRatio),
+          );
+          pdfMobileCanvasEl.style.width = `${Math.floor(viewport.width)}px`;
+          pdfMobileCanvasEl.style.height = `${Math.floor(viewport.height)}px`;
+          renderContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          activePdfRenderTask = page.render({
+            canvasContext: renderContext,
+            viewport,
+          });
+          try {
+            await activePdfRenderTask.promise;
+          } catch (pdfRenderError) {
+            if (pdfRenderError && pdfRenderError.name === "RenderingCancelledException") {
+              return;
+            }
+            throw pdfRenderError;
+          }
+          if (localRenderToken !== activePdfRenderToken) return;
+          updatePdfMobilePageUi();
+        }
+        async function loadPdfIntoMobileViewer(file) {
+          if (!file) return;
+          const pdfjsLib = await ensurePdfJsLoaded();
+          if (activePdfLoadTask && typeof activePdfLoadTask.destroy === "function") {
+            activePdfLoadTask.destroy();
+          }
+          if (activePdfDocument) {
+            activePdfDocument.destroy();
+            activePdfDocument = null;
+          }
+          const fileArrayBuffer = await file.arrayBuffer();
+          activePdfLoadTask = pdfjsLib.getDocument({ data: fileArrayBuffer });
+          activePdfDocument = await activePdfLoadTask.promise;
+          activePdfPageNumber = 1;
+          updatePdfMobilePageUi();
+          await renderPdfPage(1);
+        }
         function loadPdfPlansFromFile(file) {
           if (!file) return;
           if (currentPdfObjectUrl) {
@@ -788,20 +923,17 @@
           }
           currentPdfObjectUrl = URL.createObjectURL(file);
           if (isAppleMobile) {
-            if (pdfOpenExternalLinkEl) {
-              pdfOpenExternalLinkEl.href = currentPdfObjectUrl;
-            }
-            if (pdfMobileFallbackEl) {
-              pdfMobileFallbackEl.setAttribute("aria-hidden", "false");
-            }
+            if (pdfMobileViewerEl) pdfMobileViewerEl.setAttribute("aria-hidden", "false");
             if (pdfFrameEl) {
               pdfFrameEl.src = "about:blank";
               pdfFrameEl.style.display = "none";
             }
+            loadPdfIntoMobileViewer(file).catch((pdfError) => {
+              console.error("Failed to load PDF in mobile viewer", pdfError);
+              setStatus("Could not load PDF in side panel. Please re-open the PDF file.");
+            });
           } else {
-            if (pdfMobileFallbackEl) {
-              pdfMobileFallbackEl.setAttribute("aria-hidden", "true");
-            }
+            if (pdfMobileViewerEl) pdfMobileViewerEl.setAttribute("aria-hidden", "true");
             if (pdfFrameEl) {
               pdfFrameEl.style.display = "block";
               pdfFrameEl.src = currentPdfObjectUrl;
@@ -810,6 +942,66 @@
           setPdfPanelOpen(true);
           setStatus(`Loaded PDF plans: ${file.name}`);
         }
+        function goToPreviousPdfPage() {
+          if (!activePdfDocument || activePdfPageNumber <= 1) return;
+          renderPdfPage(activePdfPageNumber - 1).catch((pdfError) => {
+            console.error("Failed to render previous PDF page", pdfError);
+            setStatus("Could not render previous PDF page.");
+          });
+        }
+        function goToNextPdfPage() {
+          if (!activePdfDocument || activePdfPageNumber >= activePdfDocument.numPages)
+            return;
+          renderPdfPage(activePdfPageNumber + 1).catch((pdfError) => {
+            console.error("Failed to render next PDF page", pdfError);
+            setStatus("Could not render next PDF page.");
+          });
+        }
+        if (pdfMobilePrevEl) {
+          pdfMobilePrevEl.addEventListener("click", () => {
+            goToPreviousPdfPage();
+          });
+        }
+        if (pdfMobileNextEl) {
+          pdfMobileNextEl.addEventListener("click", () => {
+            goToNextPdfPage();
+          });
+        }
+        if (pdfMobileCanvasWrapEl) {
+          pdfMobileCanvasWrapEl.addEventListener(
+            "touchstart",
+            (event) => {
+              const firstTouch = event.touches && event.touches[0];
+              if (!firstTouch) return;
+              pdfTouchStartX = firstTouch.clientX;
+              pdfTouchStartY = firstTouch.clientY;
+            },
+            { passive: true },
+          );
+          pdfMobileCanvasWrapEl.addEventListener(
+            "touchend",
+            (event) => {
+              const firstTouch = event.changedTouches && event.changedTouches[0];
+              if (!firstTouch) return;
+              const deltaX = firstTouch.clientX - pdfTouchStartX;
+              const deltaY = firstTouch.clientY - pdfTouchStartY;
+              if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY))
+                return;
+              if (deltaX < 0) {
+                goToNextPdfPage();
+              } else {
+                goToPreviousPdfPage();
+              }
+            },
+            { passive: true },
+          );
+        }
+        window.addEventListener("resize", () => {
+          if (!isAppleMobile || !activePdfDocument) return;
+          renderPdfPage(activePdfPageNumber).catch((pdfError) => {
+            console.error("Failed to resize PDF page", pdfError);
+          });
+        });
         function getNodeExtras(node) {
           if (
             !node ||
