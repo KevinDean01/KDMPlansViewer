@@ -36,14 +36,14 @@
         --color-viewer-label-bg: #121826eb;
         --color-viewer-label-text: #eef4ff;
         --color-parts-panel-bg: #141a29;
-        --color-scrollbar-thumb: #9bb7ff;
-        --color-scrollbar-track: #223253;
+        --color-scrollbar-thumb: #5d6e9b;
+        --color-scrollbar-track: #141a29;
         --color-part-item-border: #2e3855;
         --color-part-item-bg: #1b2233;
         --color-part-item-hover-border: #4a66b0;
         --color-part-item-active-bg: #28498f;
         --color-part-item-active-border: #6ea0ff;
-        --color-step-current-border: #8dd0a8;
+        --color-step-current-border: #d0c78d;
         --color-scene-background: #151b29;
         --color-light-ambient: #ffffff;
         --color-light-key: #ffffff;
@@ -52,9 +52,10 @@
         --color-grid-minor: #2a344f;
         --color-highlight-fixing-selected: #ff4a4a;
         --color-highlight-fixing: #e03535;
-        --color-highlight-subphase: #cbee4e;
-        --color-highlight-selected: #55c7ff;
-        --color-highlight-default: #f6d66b;
+        --color-highlight-subphase: #5d4e0c;
+        --color-highlight-selected: #3ef722;
+        --color-highlight-default: #060606;
+        --btnbordrad: 10px;
       }
       * {
         box-sizing: border-box;
@@ -90,7 +91,7 @@
       }
       .file-button {
         padding: 8px 10px;
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         background: var(--color-primary-button-bg);
         color: var(--color-button-text);
         cursor: pointer;
@@ -99,7 +100,7 @@
       .toolbar-button {
         padding: 6px 10px;
         border: 1px solid var(--color-control-border);
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         background: var(--color-control-bg);
         color: var(--color-control-text);
         font-size: 0.82rem;
@@ -150,7 +151,7 @@
       .controls input[type="range"]::-webkit-slider-runnable-track {
         height: 6px;
         border: 1px solid var(--color-control-border);
-        border-radius: 999px;
+        border-radius: var(--btnbordrad);
         background: var(--color-control-bg);
       }
       .controls input[type="range"]::-webkit-slider-thumb {
@@ -159,20 +160,20 @@
         height: 14px;
         margin-top: -5px;
         border: 1px solid var(--color-range-thumb-border);
-        border-radius: 50%;
+        border-radius: var(--btnbordrad);
         background: var(--color-range-thumb-bg);
       }
       .controls input[type="range"]::-moz-range-track {
         height: 6px;
         border: 1px solid var(--color-control-border);
-        border-radius: 999px;
+        border-radius: var(--btnbordrad);
         background: var(--color-control-bg);
       }
       .controls input[type="range"]::-moz-range-thumb {
         width: 14px;
         height: 14px;
         border: 1px solid var(--color-range-thumb-border);
-        border-radius: 50%;
+        border-radius: var(--btnbordrad);
         background: var(--color-range-thumb-bg);
       }
       .controls span {
@@ -192,7 +193,7 @@
       .build-controls button {
         padding: 5px 8px;
         border: 1px solid var(--color-control-border);
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         background: var(--color-control-bg);
         color: var(--color-control-text);
         font-size: 0.78rem;
@@ -235,7 +236,7 @@
         z-index: 20;
         padding: 6px 10px;
         border: 1px solid var(--color-nav-button-border);
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         background: var(--color-nav-button-bg);
         color: var(--color-button-text);
         font-weight: 600;
@@ -279,7 +280,7 @@
         max-width: 260px;
         padding: 6px 8px;
         border: 1px solid var(--color-viewer-label-border);
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         background: var(--color-viewer-label-bg);
         color: var(--color-viewer-label-text);
         font-size: 0.76rem;
@@ -307,7 +308,7 @@
       }
       #partsPanel::-webkit-scrollbar-thumb {
         background: var(--color-scrollbar-thumb);
-        border-radius: 999px;
+        border-radius: var(--btnbordrad);
         border: 2px solid var(--color-scrollbar-track);
       }
       #partsPanel h2 {
@@ -328,7 +329,7 @@
       #partsList li {
         padding: 7px 8px;
         border: 1px solid var(--color-part-item-border);
-        border-radius: 6px;
+        border-radius: var(--btnbordrad);
         font-size: 0.82rem;
         color: var(--color-control-text);
         background: var(--color-part-item-bg);
