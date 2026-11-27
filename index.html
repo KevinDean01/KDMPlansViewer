@@ -1734,29 +1734,16 @@ ${line2}`,
             .toLowerCase();
         }
         function getSubAssemblyEntriesWithFixings(currentStep, entries) {
-          const expandedEntries = new Set(entries);
-          const subAssemblyGroupKeys = /* @__PURE__ */ new Set();
+          const expandedEntries = new Set();
           const stepCode = normalizeInstructionText(currentStep && currentStep.code);
-          const stepNotes = normalizeInstructionText(currentStep && currentStep.notes);
           entries.forEach((entry) => {
-            if (!entry || entry.isFixing) return;
-            const groupKey = String(entry.subAssemblyGroupKey || "").trim();
-            if (groupKey) subAssemblyGroupKeys.add(groupKey);
+            if (entry && !entry.isFixing) expandedEntries.add(entry);
           });
-          if (
-            subAssemblyGroupKeys.size === 0 &&
-            !stepCode &&
-            !stepNotes
-          )
-            return expandedEntries;
+          if (!stepCode) return expandedEntries;
           allModelEntries.forEach((entry) => {
             if (!entry || !entry.isFixing) return;
-            const groupKey = String(entry.subAssemblyGroupKey || "").trim();
             const subCode = normalizeInstructionText(
               readTextField(entry.extras, "(OA-SUB) instruction code"),
-            );
-            const subNote = normalizeInstructionText(
-              readTextField(entry.extras, "(OD-SUB) instruction notes"),
             );
             const genericType = normalizeInstructionText(
               readTextField(entry.extras, "(OC) instruction type"),
@@ -1767,21 +1754,8 @@ ${line2}`,
                     readTextField(entry.extras, "(OA) instruction code"),
                   )
                 : "";
-            const genericNote =
-              genericType === "sub assembly"
-                ? normalizeInstructionText(
-                    readTextField(entry.extras, "(OD) instruction notes"),
-                  )
-                : "";
-            const groupMatch =
-              Boolean(groupKey) && subAssemblyGroupKeys.has(groupKey);
-            const codeMatch =
-              Boolean(stepCode) &&
-              (subCode === stepCode || genericCode === stepCode);
-            const noteMatch =
-              Boolean(stepNotes) &&
-              (subNote === stepNotes || genericNote === stepNotes);
-            if (groupMatch || codeMatch || noteMatch) expandedEntries.add(entry);
+            if (subCode === stepCode || genericCode === stepCode)
+              expandedEntries.add(entry);
           });
           return expandedEntries;
         }
