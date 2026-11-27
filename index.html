@@ -1674,25 +1674,67 @@ ${line2}`,
             buildPlanStepIndex >= activeSteps.length
           )
             return /* @__PURE__ */ new Set();
-          const stepEntries = new Set(activeSteps[buildPlanStepIndex].members);
+          const currentStep = activeSteps[buildPlanStepIndex];
+          const stepEntries = new Set(currentStep.members);
           return buildPlanPhaseMode === "SUB"
-            ? getSubAssemblyEntriesWithFixings(stepEntries)
+            ? getSubAssemblyEntriesWithFixings(currentStep, stepEntries)
             : stepEntries;
         }
-        function getSubAssemblyEntriesWithFixings(entries) {
+        function normalizeInstructionText(value) {
+          return String(value || "")
+            .trim()
+            .replace(/\s+/g, " ")
+            .toLowerCase();
+        }
+        function getSubAssemblyEntriesWithFixings(currentStep, entries) {
           const expandedEntries = new Set(entries);
           const subAssemblyGroupKeys = /* @__PURE__ */ new Set();
+          const stepCode = normalizeInstructionText(currentStep && currentStep.code);
+          const stepNotes = normalizeInstructionText(currentStep && currentStep.notes);
           entries.forEach((entry) => {
             if (!entry || entry.isFixing) return;
             const groupKey = String(entry.subAssemblyGroupKey || "").trim();
             if (groupKey) subAssemblyGroupKeys.add(groupKey);
           });
-          if (subAssemblyGroupKeys.size === 0) return expandedEntries;
+          if (
+            subAssemblyGroupKeys.size === 0 &&
+            !stepCode &&
+            !stepNotes
+          )
+            return expandedEntries;
           allModelEntries.forEach((entry) => {
             if (!entry || !entry.isFixing) return;
             const groupKey = String(entry.subAssemblyGroupKey || "").trim();
-            if (!groupKey || !subAssemblyGroupKeys.has(groupKey)) return;
-            expandedEntries.add(entry);
+            const subCode = normalizeInstructionText(
+              readTextField(entry.extras, "(OA-SUB) instruction code"),
+            );
+            const subNote = normalizeInstructionText(
+              readTextField(entry.extras, "(OD-SUB) instruction notes"),
+            );
+            const genericType = normalizeInstructionText(
+              readTextField(entry.extras, "(OC) instruction type"),
+            );
+            const genericCode =
+              genericType === "sub assembly"
+                ? normalizeInstructionText(
+                    readTextField(entry.extras, "(OA) instruction code"),
+                  )
+                : "";
+            const genericNote =
+              genericType === "sub assembly"
+                ? normalizeInstructionText(
+                    readTextField(entry.extras, "(OD) instruction notes"),
+                  )
+                : "";
+            const groupMatch =
+              Boolean(groupKey) && subAssemblyGroupKeys.has(groupKey);
+            const codeMatch =
+              Boolean(stepCode) &&
+              (subCode === stepCode || genericCode === stepCode);
+            const noteMatch =
+              Boolean(stepNotes) &&
+              (subNote === stepNotes || genericNote === stepNotes);
+            if (groupMatch || codeMatch || noteMatch) expandedEntries.add(entry);
           });
           return expandedEntries;
         }
@@ -1846,7 +1888,10 @@ ${line2}`,
           const currentStepEntries = new Set(currentStep.members);
           const currentStepEntriesWithFixings =
             buildPlanPhaseMode === "SUB"
-              ? getSubAssemblyEntriesWithFixings(currentStepEntries)
+              ? getSubAssemblyEntriesWithFixings(
+                  currentStep,
+                  currentStepEntries,
+                )
               : currentStepEntries;
           const visibleEntries = /* @__PURE__ */ new Set();
           if (currentStep.cumulative) {
