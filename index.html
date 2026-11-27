@@ -1674,7 +1674,27 @@ ${line2}`,
             buildPlanStepIndex >= activeSteps.length
           )
             return /* @__PURE__ */ new Set();
-          return new Set(activeSteps[buildPlanStepIndex].members);
+          const stepEntries = new Set(activeSteps[buildPlanStepIndex].members);
+          return buildPlanPhaseMode === "SUB"
+            ? getSubAssemblyEntriesWithFixings(stepEntries)
+            : stepEntries;
+        }
+        function getSubAssemblyEntriesWithFixings(entries) {
+          const expandedEntries = new Set(entries);
+          const subAssemblyGroupKeys = /* @__PURE__ */ new Set();
+          entries.forEach((entry) => {
+            if (!entry || entry.isFixing) return;
+            const groupKey = String(entry.subAssemblyGroupKey || "").trim();
+            if (groupKey) subAssemblyGroupKeys.add(groupKey);
+          });
+          if (subAssemblyGroupKeys.size === 0) return expandedEntries;
+          allModelEntries.forEach((entry) => {
+            if (!entry || !entry.isFixing) return;
+            const groupKey = String(entry.subAssemblyGroupKey || "").trim();
+            if (!groupKey || !subAssemblyGroupKeys.has(groupKey)) return;
+            expandedEntries.add(entry);
+          });
+          return expandedEntries;
         }
         function getFixingEntries(entries) {
           const fixingEntries = /* @__PURE__ */ new Set();
@@ -1824,6 +1844,10 @@ ${line2}`,
           }
           const currentStep = activeSteps[buildPlanStepIndex];
           const currentStepEntries = new Set(currentStep.members);
+          const currentStepEntriesWithFixings =
+            buildPlanPhaseMode === "SUB"
+              ? getSubAssemblyEntriesWithFixings(currentStepEntries)
+              : currentStepEntries;
           const visibleEntries = /* @__PURE__ */ new Set();
           if (currentStep.cumulative) {
             for (let index = 0; index <= buildPlanStepIndex; index += 1) {
@@ -1831,7 +1855,9 @@ ${line2}`,
               step.members.forEach((entry) => visibleEntries.add(entry));
             }
           } else {
-            currentStepEntries.forEach((entry) => visibleEntries.add(entry));
+            currentStepEntriesWithFixings.forEach((entry) =>
+              visibleEntries.add(entry),
+            );
           }
           allModelEntries.forEach((entry) => {
             const isVisible = visibleEntries.has(entry);
@@ -1847,7 +1873,7 @@ ${line2}`,
           applyStepHighlights(/* @__PURE__ */ new Set(), null);
           updateBuildItListFiltering(currentStepEntries);
           if (buildPlanPhaseMode === "SUB" || buildPlanPhaseMode === "MAIN")
-            markFirstVisibleRowActive(currentStepEntries);
+            markFirstVisibleRowActive(currentStepEntriesWithFixings);
           if (selectedPartMesh && !selectedPartMesh.visible) clearSelection();
           if (
             !buildItModeEnabled &&
