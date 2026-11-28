@@ -390,7 +390,7 @@
         top: 48px;
         left: 10px;
         z-index: 26;
-        width: min(340px, calc(100% - 20px));
+        width: min(260px, calc(100% - 20px));
         max-height: calc(100% - 58px);
         overflow: auto;
         padding: 12px;
@@ -835,7 +835,7 @@
       <button id="unitsToggle" class="toolbar-button" type="button" title="Switch to Imperial size reporting">
         Units: Metric
       </button>
-      <button id="fixingsToggle" class="toolbar-button" type="button" aria-controls="fixingsPanel" aria-expanded="false" title="Show or hide fixings assigned to the current build plan step">
+      <button id="fixingsToggle" class="toolbar-button active" type="button" aria-controls="fixingsPanel" aria-expanded="true" title="Show or hide fixings assigned to the current build plan step">
         Fixings
       </button>
       <div id="settingsPanel" class="controls settings-panel">
@@ -890,7 +890,7 @@
               Next Step
             </button>
             <span id="buildStepLabel" aria-live="polite">Build Plan: Overview</span>
-            <aside id="fixingsPanel" aria-labelledby="fixingsPanelTitle" hidden>
+            <aside id="fixingsPanel" aria-labelledby="fixingsPanelTitle">
               <h2 id="fixingsPanelTitle">Step Fixings</h2>
               <div aria-live="polite">
                 <p id="fixingsStepLabel">No step selected</p>
