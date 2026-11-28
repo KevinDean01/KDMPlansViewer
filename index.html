@@ -385,6 +385,49 @@
         opacity: 0.45;
         cursor: default;
       }
+      #fixingsPanel {
+        position: absolute;
+        top: 48px;
+        left: 10px;
+        z-index: 26;
+        width: min(340px, calc(100% - 20px));
+        max-height: calc(100% - 58px);
+        overflow: auto;
+        padding: 12px;
+        border: 1px solid var(--color-viewer-label-border);
+        border-radius: var(--btnbordrad);
+        background: var(--color-viewer-label-bg);
+        color: var(--color-viewer-label-text);
+        font-size: 0.78rem;
+        scrollbar-color: var(--color-scrollbar-thumb)
+          var(--color-scrollbar-track);
+      }
+      #fixingsPanel h2 {
+        margin: 0 0 6px;
+        font-size: 0.9rem;
+      }
+      #fixingsPanel p {
+        margin: 6px 0;
+        color: var(--color-label-text);
+        overflow-wrap: anywhere;
+      }
+      #fixingsPanel table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      #fixingsPanel th,
+      #fixingsPanel td {
+        padding: 6px 4px;
+        border-bottom: 1px solid var(--color-toolbar-border);
+        text-align: left;
+        overflow-wrap: anywhere;
+      }
+      #fixingsPanel th:last-child,
+      #fixingsPanel td:last-child {
+        width: 40px;
+        text-align: right;
+      }
       .viewer-overlay {
         position: absolute;
         inset: 0;
@@ -748,6 +791,10 @@
           top: 46px;
           max-width: calc(100% - 20px);
         }
+        #fixingsPanel {
+          top: 86px;
+          max-height: calc(100% - 96px);
+        }
         .viewer-nav-button {
           width: calc(50% - 15px);
           padding: 6px 2px;
@@ -784,6 +831,12 @@
       </button>
       <button id="settingsToggle" class="toolbar-button" type="button" aria-controls="settingsPanel" aria-expanded="false">
         Settings
+      </button>
+      <button id="unitsToggle" class="toolbar-button" type="button" title="Switch to Imperial size reporting">
+        Units: Metric
+      </button>
+      <button id="fixingsToggle" class="toolbar-button" type="button" aria-controls="fixingsPanel" aria-expanded="false" title="Show or hide fixings assigned to the current build plan step">
+        Fixings
       </button>
       <div id="settingsPanel" class="controls settings-panel">
         <label
@@ -837,6 +890,24 @@
               Next Step
             </button>
             <span id="buildStepLabel" aria-live="polite">Build Plan: Overview</span>
+            <aside id="fixingsPanel" aria-labelledby="fixingsPanelTitle" hidden>
+              <h2 id="fixingsPanelTitle">Step Fixings</h2>
+              <div aria-live="polite">
+                <p id="fixingsStepLabel">No step selected</p>
+                <p id="fixingsEmpty">Select a build plan step to see its fixings.</p>
+                <table id="fixingsTable" aria-label="Fixings by type, size and quantity" hidden>
+                  <thead>
+                    <tr>
+                      <th scope="col">Type</th>
+                      <th scope="col" title="Diameter x length; ? means an unspecified dimension">Size</th>
+                      <th scope="col" title="Quantity">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fixingsTableBody"></tbody>
+                </table>
+              </div>
+              <p>Quantities include hidden fixings.</p>
+            </aside>
           </div>
           <aside id="pdfPanel">
             <div id="pdfMobileViewer" aria-hidden="true">
@@ -930,6 +1001,13 @@
         var statusEl = document.getElementById("status");
         var settingsToggleEl = document.getElementById("settingsToggle");
         var settingsPanelEl = document.getElementById("settingsPanel");
+        var unitsToggleEl = document.getElementById("unitsToggle");
+        var fixingsToggleEl = document.getElementById("fixingsToggle");
+        var fixingsPanelEl = document.getElementById("fixingsPanel");
+        var fixingsStepLabelEl = document.getElementById("fixingsStepLabel");
+        var fixingsEmptyEl = document.getElementById("fixingsEmpty");
+        var fixingsTableEl = document.getElementById("fixingsTable");
+        var fixingsTableBodyEl = document.getElementById("fixingsTableBody");
         var partsListEl = document.getElementById("partsList");
         var unhideAllEl = document.getElementById("unhideAll");
         var partsPanelTitleEl = document.querySelector("#partsPanel h2");
@@ -1061,6 +1139,8 @@
         var buildItModeEnabled = true;
         var buildPlanPhaseMode = "MAIN";
         var labelsEnabled = true;
+        var displayDimensionUnit = null;
+        var modelDimensionUnit = "mm";
         var stepHighlightOverlays = /* @__PURE__ */ new Map();
         var partEntryByMesh = /* @__PURE__ */ new Map();
         var pdfJsLibPromise = null;
@@ -1471,6 +1551,22 @@
             return `${widthText}x${depthText}x${lengthText}${unit}`;
           }
           return getPanelLabelFromObjectName(objectName);
+        }
+        function updateDimensionLabels() {
+          const unit = displayDimensionUnit || modelDimensionUnit;
+          unitsToggleEl.textContent = `Units: ${unit === "in" ? "Imperial" : "Metric"}`;
+          unitsToggleEl.title = `Switch to ${unit === "in" ? "Metric" : "Imperial"} size reporting`;
+          allModelEntries.forEach((entry) => {
+            entry.listName = getPanelLabel(
+              entry.extras,
+              entry.displayName,
+              displayDimensionUnit || entry.dimensionUnit,
+              true,
+            );
+            if (entry.sizeEl) entry.sizeEl.textContent = entry.listName;
+          });
+          refreshLeaderLabel();
+          updateFixingsPanel();
         }
         function parseInstructionCode(code) {
           const cleaned = (code || "").trim();
@@ -2140,6 +2236,7 @@ ${line2}`,
             : buildPlanSteps.length > 0
               ? `Build Plan: Overview (${buildPlanSteps.length} steps)`
               : "Build Plan: No steps";
+          updateFixingsPanel();
           buildResetEl.disabled = !hasSteps || buildPlanStepIndex < 0;
           buildPrevEl.disabled = !hasSteps || buildPlanStepIndex <= 0;
           buildNextEl.disabled =
@@ -2236,6 +2333,64 @@ ${line2}`,
             if (entry.isFixing) fixingEntries.add(entry);
           });
           return fixingEntries;
+        }
+        function updateFixingsPanel() {
+          const currentStep = getCurrentStep();
+          fixingsStepLabelEl.textContent = currentStep
+            ? `${phaseLabels[currentStep.phase]} ${currentStep.code}`
+            : "No step selected";
+          const grouped = new Map();
+          getFixingEntries(getCurrentStepEntries()).forEach((entry) => {
+            const unit = displayDimensionUnit || entry.dimensionUnit;
+            const diameterField = readTextField(entry.extras, "(M) fixing dia")
+              ? "(M) fixing dia"
+              : "(M) fixing diameter";
+            const dimensions = [diameterField, "(N) fixing length"].map(
+              (field) =>
+                readTextField(entry.extras, field) === ""
+                  ? null
+                  : readNumberField(entry.extras, field),
+            );
+            const hasDimensions = dimensions.some((value) => value !== null);
+            const sizeValues = dimensions.map((value) =>
+              value === null
+                ? "?"
+                : formatDimensionValue(value, unit),
+            );
+            const size = hasDimensions
+              ? `${sizeValues.join("x")}${unit === "in" ? "" : "mm"}`
+              : "Not specified";
+            const type = entry.fixingType;
+            const key = JSON.stringify([
+              normalizeInstructionText(type),
+              dimensions,
+            ]);
+            if (!grouped.has(key)) {
+              grouped.set(key, { type, size, quantity: 0 });
+            }
+            grouped.get(key).quantity += 1;
+          });
+          const groups = Array.from(grouped.values()).sort(
+            (a, b) =>
+              a.type.localeCompare(b.type, void 0, { sensitivity: "base" }) ||
+              a.size.localeCompare(b.size, void 0, { numeric: true }),
+          );
+          const rows = document.createDocumentFragment();
+          groups.forEach((group) => {
+            const row = document.createElement("tr");
+            [group.type, group.size, String(group.quantity)].forEach((value) => {
+              const cell = document.createElement("td");
+              cell.textContent = value;
+              row.appendChild(cell);
+            });
+            rows.appendChild(row);
+          });
+          fixingsTableBodyEl.replaceChildren(rows);
+          fixingsTableEl.hidden = groups.length === 0;
+          fixingsEmptyEl.hidden = groups.length > 0;
+          fixingsEmptyEl.textContent = currentStep
+            ? "No fixings used in this step."
+            : "Select a build plan step to see its fixings.";
         }
         function getSelectionHighlightEntries(
           selectedEntry,
@@ -2448,7 +2603,6 @@ ${line2}`,
           clearPartsList();
           let meshCount = 0;
           const fixingNamePattern = /(nail|screw|bolt|washer|fixing)/i;
-          let modelDimensionUnit = "mm";
           let hasProjectUnitOverride = false;
           partEntries = [];
           allModelEntries = [];
@@ -2460,9 +2614,13 @@ ${line2}`,
                 ? child.name
                 : `Mesh ${meshCount}`;
             const extras = getNodeExtras(child);
-            const fixingType = readTextField(extras, "(K) fixing type");
+            const fixingType =
+              readTextField(extras, "(k) fixings type") ||
+              readTextField(extras, "(K) fixings type") ||
+              readTextField(extras, "(K) fixing type");
+            const fixingNameMatch = displayName.match(fixingNamePattern);
             const isFixing =
-              fixingNamePattern.test(displayName) || Boolean(fixingType);
+              Boolean(fixingNameMatch) || Boolean(fixingType);
             const instructionInfo = createInstructionSummary(extras);
             const memberName = readTextField(extras, "(C) member");
             const subAssemblyGroupName = readTextField(
@@ -2486,6 +2644,8 @@ ${line2}`,
               isSubAssemblyPart,
               extras,
               isFixing,
+              fixingType:
+                fixingType || (fixingNameMatch ? fixingNameMatch[1] : ""),
               instructionInfo,
               manuallyVisible: true,
               stepKeys: /* @__PURE__ */ new Set(),
@@ -2503,13 +2663,11 @@ ${line2}`,
               partEntries.length > 0 ? partEntries : allModelEntries,
             );
           allModelEntries.forEach((entry) => {
-            entry.listName = getPanelLabel(
-              entry.extras,
-              entry.displayName,
-              modelDimensionUnit,
-              hasProjectUnitOverride,
-            );
+            entry.dimensionUnit = hasProjectUnitOverride || entry.isFixing
+              ? modelDimensionUnit
+              : detectEntryDimensionUnit(entry.extras) || modelDimensionUnit;
           });
+          updateDimensionLabels();
           partEntries.sort((a, b) => {
             const aSort = a.instructionInfo.sortKey;
             const bSort = b.instructionInfo.sortKey;
@@ -2533,6 +2691,7 @@ ${line2}`,
             const sizeEl = document.createElement("div");
             sizeEl.className = "part-size";
             sizeEl.textContent = entry.listName;
+            entry.sizeEl = sizeEl;
             const textEl = document.createElement("div");
             textEl.className = "part-text";
             textEl.appendChild(nameEl);
@@ -2692,6 +2851,17 @@ ${line2}`,
           const isOpen = settingsPanelEl.classList.toggle("open");
           settingsToggleEl.classList.toggle("active", isOpen);
           settingsToggleEl.setAttribute("aria-expanded", String(isOpen));
+        });
+        unitsToggleEl.addEventListener("click", () => {
+          const unit = displayDimensionUnit || modelDimensionUnit;
+          displayDimensionUnit = unit === "in" ? "mm" : "in";
+          updateDimensionLabels();
+        });
+        fixingsToggleEl.addEventListener("click", () => {
+          const isOpen = fixingsPanelEl.hidden;
+          fixingsPanelEl.hidden = !isOpen;
+          fixingsToggleEl.classList.toggle("active", isOpen);
+          fixingsToggleEl.setAttribute("aria-expanded", String(isOpen));
         });
         new ResizeObserver(resizeRendererToRenderPanel).observe(renderPanelEl);
         function animate() {
