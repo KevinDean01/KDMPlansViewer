@@ -856,7 +856,7 @@
     <div class="bottom-bar">
       <div id="buildPlanControls" class="build-controls">
         <div class="build-stage-buttons">
-          <button id="buildStageFab" type="button">Fabrication</button>
+          <button id="buildStageFab" type="button" title="Fabricate all components with the same OA-FAB code in one step">Fabrication</button>
           <button id="buildStageSub" type="button">Sub Assembly</button>
           <button id="buildStageMain" type="button">Main Assembly</button>
         </div>
@@ -2025,36 +2025,6 @@ ${line2}`,
           );
         }
         function buildBuildPlanSteps(entries) {
-          const fabPhase = phaseConfig.find((phase) => phase.key === "FAB");
-          const fabSteps = entries
-            .map((entry) => {
-              const code = fabPhase
-                ? readTextField(entry.extras, fabPhase.codeField)
-                : "";
-              if (!code) return null;
-              const key = `FAB:${code}:${entry.displayName}`;
-              entry.stepKeys.add(key);
-              return {
-                key,
-                phase: "FAB",
-                code,
-                type: fabPhase
-                  ? readTextField(entry.extras, fabPhase.typeField)
-                  : "",
-                notes: fabPhase
-                  ? readTextField(entry.extras, fabPhase.notesField)
-                  : "",
-                members: [entry],
-                cumulative: false,
-              };
-            })
-            .filter(Boolean);
-          fabSteps.sort((a, b) => {
-            const codeCmp =
-              parseInstructionCode(a.code) - parseInstructionCode(b.code);
-            if (codeCmp !== 0) return codeCmp;
-            return a.members[0].listName.localeCompare(b.members[0].listName);
-          });
           function readPhaseInstruction(extras, phase, fieldKind) {
             const primaryFieldByKind = {
               code: phase.codeField,
@@ -2084,11 +2054,15 @@ ${line2}`,
             }
             return "";
           }
-          function groupedStepsForPhase(phaseKey, cumulative) {
+          function groupedStepsForPhase(
+            phaseKey,
+            cumulative,
+            phaseEntries = allModelEntries,
+          ) {
             const phase = phaseConfig.find((item) => item.key === phaseKey);
             if (!phase) return [];
             const grouped = /* @__PURE__ */ new Map();
-            allModelEntries.forEach((entry) => {
+            phaseEntries.forEach((entry) => {
               const code = readPhaseInstruction(entry.extras, phase, "code");
               if (!code) return;
               const stepKey = `${phaseKey}:${code}`;
@@ -2116,6 +2090,7 @@ ${line2}`,
             });
             return steps;
           }
+          const fabSteps = groupedStepsForPhase("FAB", false, entries);
           const subSteps = groupedStepsForPhase("SUB", false);
           const mainSteps = groupedStepsForPhase("MAIN", true);
           return [...fabSteps, ...subSteps, ...mainSteps];
@@ -2416,6 +2391,14 @@ ${line2}`,
           updateBuildItListFiltering(currentStepEntries);
           if (buildPlanPhaseMode === "SUB" || buildPlanPhaseMode === "MAIN")
             markFirstVisibleRowActive(currentStepEntriesWithFixings);
+          else if (
+            selectedPartMesh &&
+            selectedPartMesh.visible &&
+            currentStepEntries.has(partEntryByMesh.get(selectedPartMesh))
+          )
+            applyStepHighlights(/* @__PURE__ */ new Set(), selectedPartMesh);
+          else
+            markFirstVisibleRowActive(currentStepEntries);
           if (selectedPartMesh && !selectedPartMesh.visible) clearSelection();
           if (
             !buildItModeEnabled &&
