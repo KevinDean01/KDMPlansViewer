@@ -973,6 +973,7 @@
           GridHelper,
           Group,
           Mesh,
+          MeshBasicMaterial,
           PCFSoftShadowMap,
           PerspectiveCamera,
           PlaneGeometry,
@@ -1839,10 +1840,31 @@
             });
           });
         }
-        function addEdgeHighlightOverlay(mesh, colorHex, isSelected = false) {
+        function addEdgeHighlightOverlay(
+          mesh,
+          colorHex,
+          isSelected = false,
+          isFixing = false,
+        ) {
           if (!mesh || !mesh.geometry) return;
           const overlayGroup = new Group();
           overlayGroup.name = "__stepHighlightGroup";
+          if (isFixing) {
+            const fixingOverlay = new Mesh(
+              mesh.geometry.clone(),
+              new MeshBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 0.45,
+                depthTest: false,
+                depthWrite: false,
+                toneMapped: false,
+              }),
+            );
+            fixingOverlay.name = "__fixingHighlight";
+            fixingOverlay.renderOrder = 20;
+            overlayGroup.add(fixingOverlay);
+          }
           const edgePasses = [
             {
               opacity: isSelected ? 0.9 : 0.5,
@@ -2116,6 +2138,7 @@ ${line2}`,
               mesh,
               getHighlightColor(entry, false),
               false,
+              entry.isFixing,
             );
           });
           if (!selectedMesh || !selectedMesh.visible) return;
@@ -2133,6 +2156,7 @@ ${line2}`,
             selectedMesh,
             getHighlightColor(selectedEntry, true),
             true,
+            Boolean(selectedEntry && selectedEntry.isFixing),
           );
         }
         function buildBuildPlanSteps(entries) {
