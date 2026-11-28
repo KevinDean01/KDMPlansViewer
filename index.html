@@ -212,7 +212,7 @@
         background: var(--color-control-active-bg);
         color: var(--color-control-active-text);
       }
-      #buildStepLabel {
+      #buildStepLabels {
         position: absolute;
         top: 10px;
         left: 50%;
@@ -229,6 +229,14 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      #buildStepLabels span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #buildOverallStepLabel {
+        font-weight: 600;
       }
       main {
         flex: 1;
@@ -683,7 +691,7 @@
         border: 1px solid var(--color-toolbar-border);
         border-radius: 14px;
       }
-      #buildStepLabel,
+      #buildStepLabels,
       .viewer-label {
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -733,7 +741,7 @@
           grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
           gap: 8px;
         }
-        #buildStepLabel {
+        #buildStepLabels {
           top: 46px;
           max-width: calc(100% - 20px);
         }
@@ -825,7 +833,10 @@
             <button id="buildNext" class="viewer-nav-button right" type="button">
               Next Step
             </button>
-            <span id="buildStepLabel">Build Plan: Overview</span>
+            <div id="buildStepLabels" aria-live="polite">
+              <span id="buildOverallStepLabel">Build Plan: No steps</span>
+              <span id="buildStepLabel">Build Plan: Overview</span>
+            </div>
           </div>
           <aside id="pdfPanel">
             <div id="pdfMobileViewer" aria-hidden="true">
@@ -929,6 +940,9 @@
         var buildStageSubEl = document.getElementById("buildStageSub");
         var buildStageMainEl = document.getElementById("buildStageMain");
         var buildStepLabelEl = document.getElementById("buildStepLabel");
+        var buildOverallStepLabelEl = document.getElementById(
+          "buildOverallStepLabel",
+        );
         var labelToggleEl = document.getElementById("labelToggle");
         var lightIntensityEl = document.getElementById("lightIntensity");
         var shadowOpacityEl = document.getElementById("shadowOpacity");
@@ -2105,6 +2119,7 @@ ${line2}`,
         function updateBuildPlanControls() {
           if (
             !buildStepLabelEl ||
+            !buildOverallStepLabelEl ||
             !buildResetEl ||
             !buildPrevEl ||
             !buildNextEl ||
@@ -2118,6 +2133,12 @@ ${line2}`,
           const hasSteps = activeSteps.length > 0;
           if (buildPlanStepIndex >= activeSteps.length)
             buildPlanStepIndex = activeSteps.length - 1;
+          const currentStep = getCurrentStep();
+          buildOverallStepLabelEl.textContent = currentStep
+            ? `Build Plan Step ${buildPlanSteps.indexOf(currentStep) + 1} / ${buildPlanSteps.length}`
+            : buildPlanSteps.length > 0
+              ? `Build Plan: Overview (${buildPlanSteps.length} steps)`
+              : "Build Plan: No steps";
           buildResetEl.disabled = !hasSteps || buildPlanStepIndex < 0;
           buildPrevEl.disabled = !hasSteps || buildPlanStepIndex <= 0;
           buildNextEl.disabled =
@@ -2150,7 +2171,6 @@ ${line2}`,
               : `${phaseLabel}: Overview`;
             return;
           }
-          const currentStep = activeSteps[buildPlanStepIndex];
           const stageLabel = currentStep.type || phaseLabel;
           const summary = currentStep.notes
             ? ` \u2014 ${currentStep.notes}`
